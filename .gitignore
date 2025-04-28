@@ -1,0 +1,6 @@
+website/cmd/web/config.json
+website/tls/cert.pem
+website/tls/key.pem
+website/instance/farm_data.db
+website/cmd/web/instance/snippets.db
+website/cmd/web/website

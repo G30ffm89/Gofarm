@@ -1,0 +1,16 @@
+# Use an official Go runtime as a parent image
+FROM golang:latest AS builder
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy the Go module definition file
+COPY . .
+
+# Download Go module dependencies
+RUN go mod download -x
+
+# Build the Go application for the farm controller
+RUN go build -o farm_controller farm/farm_control.go
+
+CMD ["./farm_controller"]

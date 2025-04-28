@@ -1,0 +1,35 @@
+{{define "base"}}
+<!doctype html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<title>{{template "title" .}} - Oasis</title>
+</head>
+<link rel='stylesheet' href='/static/css/main.css'>
+<link rel='shortcut icon' href='/static/img/favicon.ico' type='image/x-icon'>
+<script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js" type="text/javascript"></script>
+<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700'>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.1.4/raphael-min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/justgage/1.2.9/justgage.min.js"></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<body>
+<header>
+<h1><a href='/'>Oasis</a></h1>
+</header>
+{{template "nav" .}}
+<main>
+<!-- Display the flash message if one exists -->
+{{with .Flash}}
+<div class='flash'>{{.}}</div>
+{{end}}
+{{template "main" .}}
+</main>
+<footer>
+Powered by <a href='https://golang.org/'>Go</a> in {{.CurrentYear}}
+</footer>
+<script src='/static/js/main.js' type='text/javascript'></script>
+</body>
+</html>
+{{end}}

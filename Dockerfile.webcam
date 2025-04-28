@@ -1,0 +1,32 @@
+FROM golang:1.24-alpine	AS builder
+
+WORKDIR /app
+
+# Copy the Go module definition file
+COPY go.mod .
+
+# Copy the webcam streamer code
+COPY . .
+
+# Download Go modules
+RUN go mod download -x
+
+# Build your Go application
+RUN go build -o streamer webcam/streamer.go
+
+# Create a minimal runtime image
+FROM alpine:latest
+
+WORKDIR /root
+
+# Install necessary runtime packages for V4L2 and libjpeg
+RUN apk update && apk add --no-cache v4l-utils libjpeg
+
+# Copy the built executable from the builder stage
+COPY --from=builder /app/streamer .
+
+# Expose the port
+EXPOSE 8081
+
+# Run the application
+CMD ["./streamer", "-l", ":8081"]

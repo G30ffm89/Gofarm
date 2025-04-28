@@ -1,0 +1,40 @@
+FROM golang:1.24-bookworm AS builder
+
+WORKDIR /app
+
+# Copy the Go module definition file
+COPY go.mod .
+COPY go.sum .
+
+# Copy the entire project content
+COPY . .
+
+# Download Go modules
+RUN go mod download -x
+
+# Build the Go application
+WORKDIR /app/website/cmd/web
+RUN go build -o farm_site furitingoasis/temp_humid/website/cmd/web
+
+# Create a minimal runtime image based on Alpine Linux
+FROM alpine:latest
+
+WORKDIR /app
+
+# Install any necessary runtime dependencies (e.g., for SQLite if needed)
+# RUN apk add --no-cache sqlite
+
+# Copy the built executable from the builder stage
+COPY --from=builder /app/website/cmd/web/farm_site .
+
+# Copy the 'ui' directory
+COPY --from=builder /app/website/ui ./ui
+
+# Define the database directory inside the container
+VOLUME /app/instance
+
+# Expose the port your application listens on (e.g., 4000)
+EXPOSE 4000
+
+# Command to run the executable
+CMD ["./farm_site", "-dsn", "instance/snippets.db"]
