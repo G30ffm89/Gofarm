@@ -1,0 +1,74 @@
+networks:
+  farm-network:
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mos1
+    networks:
+      - farm-network
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - /etc/mosquitto/conf.d/listeners.conf:/mosquitto/config/mosquitto.conf
+
+  # website:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.website
+  #   container_name: website
+  #   networks:
+  #     - farm-network
+  #   ports:
+  #     - "4000:4000"
+  #   volumes:
+  #     - /home/mike/Documents/Gofarm/website/cmd/web/instance/:/app/instance/
+  #     - /home/mike/Documents/Gofarm/website/ui/:/app/ui/
+  #   depends_on:
+  #     - mosquitto
+
+  website:
+    build:
+      context: .
+      dockerfile: Dockerfile.website.dev 
+    container_name: website
+    networks:
+      - farm-network
+    ports:
+      - "4000:4000"
+    volumes:
+      - /home/mike/Documents/Gofarm/website:/app/website
+      - /home/mike/Documents/Gofarm/go.mod:/app/go.mod
+      - /home/mike/Documents/Gofarm/go.sum:/app/go.sum
+    working_dir: /app/website
+    command: go run ./cmd/web/ -dsn /cmd/web/instance/snippets.db
+    depends_on:
+      - mosquitto
+
+  webcam:
+    build:
+      context: .
+      dockerfile: Dockerfile.webcam
+    container_name: webcam
+    networks:
+      - farm-network
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mosquitto
+    privileged: true
+
+  farmcontrol:
+    build:
+      context: .
+      dockerfile: Dockerfile.farmcontrol
+    container_name: farmcontrol
+    networks:
+      - farm-network
+    depends_on:
+      - mosquitto
+    privileged: true
+
+volumes:
+  farmcontrol_instance:

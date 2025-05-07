@@ -1,0 +1,9 @@
+{
+    "farm_controls": {
+      "pump": "0",
+      "heater": "0",
+      "fan": "0",
+      "mister": "0",
+      "lights": "0"
+    }
+  }
