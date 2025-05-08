@@ -10,7 +10,7 @@ const mqttTopicSensors = 'farm/sensors/sensors';
 const mqttTopicDevices = 'farm/sensors/devices';
 const mqttTopicOverride = 'farm/sensors/override';
 const mqttTopicConfigSet = 'farm/sensors/config';
-const mqttTopicConfigStatus = 'farm/config/status';
+const mqttTopicConfigStatus = 'farm/sensors/status';
 
 function connectMQTT() {
     client = mqtt.connect(mqttBroker, { clientId: mqttClientId });
@@ -86,7 +86,15 @@ function handleSensorData(data) {
     if (temp_guage) temp_guage.refresh(data.temperature);
 
     if (thchart) {
-        const timeLabel = data.timestamp.substring(11, 16);
+        const timeLabel = data.map(item => {
+            const date = new Date(item.timestamp);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+            const year = date.getFullYear();
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${day}-${month}-${year} ${hours}:${minutes}`;
+        });
         thchart.data.labels.push(timeLabel);
         thchart.data.datasets[0].data.push(data.temperature);
         thchart.data.datasets[1].data.push(data.humidity);
@@ -136,7 +144,6 @@ function setDeviceState(device, state) {
         console.error('MQTT: Not connected, cannot publish override.');
     }
 }
-
 
 function setConfig() {
     const tempMinInput = document.getElementById('temp-min');
@@ -214,7 +221,6 @@ function setConfig() {
       }
   }
   
-
 function updateConfigForm(config) {
     const tempMinInput = document.getElementById('temp-min');
     const tempMaxInput = document.getElementById('temp-max');
@@ -237,7 +243,13 @@ function updateConfigForm(config) {
 
 document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('temp_humid_chart');
+    let thchart; // Declare the chart variable outside the function
+    const updateInterval = 5 * 60 * 1000; // Update every 5 minutes (in milliseconds)
+
     function createChart(temperature = [], humidity = [], timeLabel = []) {
+        if (thchart) { // Check if a chart instance already exists
+            thchart.destroy(); // Destroy the existing chart to update it
+        }
         thchart = new Chart(ctx, {
             type: 'line',
             data: {
@@ -247,11 +259,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         label: 'Temperature',
                         data: temperature,
                         yAxisID: 'y',
+                        borderColor: 'rgba(255, 99, 132, 1)', // Example color
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)', // Example background color
+                        tension: 0.1 // Smoother lines
                     },
                     {
                         label: 'Humidity',
                         data: humidity,
                         yAxisID: 'y1',
+                        borderColor: 'rgba(54, 162, 235, 1)', // Example color
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)', // Example background color
+                        tension: 0.1 // Smoother lines
                     }
                 ]
             },
@@ -261,24 +279,96 @@ document.addEventListener('DOMContentLoaded', function() {
                         type: 'linear',
                         display: true,
                         position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Temperature (°C)'
+                        }
                     },
                     y1:{
                         type: 'linear',
                         display: true,
                         position: 'right',
+                        grid: {
+                            drawOnChartArea: false // Don't draw grid lines on the chart area
+                        },
+                        title: {
+                            display: true,
+                            text: 'Humidity (%)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
                     }
                 },
-                maintainAspectRatio: false
+                maintainAspectRatio: false,
+                responsive: true
             }
         });
     }
-    createChart();
+
+    // Function to fetch data from the API
+    async function fetchData() {
+        try {
+            const response = await fetch('/api/sensor_data');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+
+            const formattedTimestamps = data.map(item => {
+                const date = new Date(item.timestamp);
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+                const year = date.getFullYear();
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                return `${hours}:${minutes} ${day}-${month}`; // More concise time format
+            });// Format timestamp as needed
+            const temperatures = data.map(item => item.temperature);
+            const humidities = data.map(item => item.humidity);
+
+            createChart(temperatures, humidities, formattedTimestamps);
+
+        } catch (error) {
+            console.error('Error fetching sensor data:', error);
+            // Optionally display an error message on the page
+        }
+    }
+
+    // Call fetchData when the page loads
+    fetchData();
+
+    // Periodically update the chart by fetching data again
+    setInterval(fetchData, updateInterval);
     humid_gauge = new JustGage({ id: "humid-guage", title: "Humidity", label: "%", value: 0, min: 0, max: 100 });
     temp_guage = new JustGage({ id: "temp-guage", title: "Temperature", label: "°C", value: 0, min: 0, max: 30 });
 
-
     connectMQTT();
 
+    function updateTime() {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        ];
+        const month = monthNames[now.getMonth()]; // Month is 0-indexed
+        const year = now.getFullYear();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+    
+        const formattedTime = `${day} ${month} ${year} - ${hours}:${minutes}`;
+    
+        document.getElementById('current-time').textContent = formattedTime;
+    }
+
+    // Update the time every second (you can adjust the interval)
+    setInterval(updateTime, 1000);
+
+    // Initial call to display the time immediately on load
+    updateTime();
 
     const pumpOnButton = document.getElementById('pump-on');
     const pumpOffButton = document.getElementById('pump-off');

@@ -6,7 +6,7 @@ WORKDIR /app
 COPY go.mod .
 
 # Copy the webcam streamer code
-COPY . .
+COPY webcam/ .
 
 # Download Go modules
 RUN go mod download -x

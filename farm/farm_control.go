@@ -1,10 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"gobot.io/x/gobot/v2"
 	"gobot.io/x/gobot/v2/drivers/gpio"
@@ -50,6 +54,8 @@ var overrides = map[string]string{
 	"lights": "no override",
 }
 
+var dbMutex sync.Mutex // Used for database to stop the program from spazzing if the bot tries to write while the db is open
+
 type ConfigStatus struct {
 	MinTemperature float32 `json:"target_temperature_min"`
 	MaxTemperature float32 `json:"target_temperature_max"`
@@ -71,13 +77,31 @@ func main() {
 		mister_state           int       = 0
 		target_temperature_min float32   = 15.0
 		target_temperature_max float32   = 20.0
-		target_humidity_min    float32   = 70.0
+		target_humidity_min    float32   = 75.0
 		target_humidity_max    float32   = 90.0
 		fan_run_duration                 = 5 * time.Minute
 		fan_interval                     = 60 * time.Minute
 		lights_on_hour_UTC     int       = 8
 		lights_off_hour_UTC    int       = 20
 	)
+
+	db, err := sql.Open("sqlite3", "/app/sensor_data.db") //location INSIDE THE DOCKER CONTAINER
+	if err != nil {
+		log.Fatal("Error opening database:", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS sensors (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			temperature REAL,
+			humidity REAL,
+			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		log.Fatal("Error creating sensors table:", err)
+	}
 
 	r := raspi.NewAdaptor()
 	sht2x := i2c.NewSHT2xDriver(r)
@@ -88,6 +112,28 @@ func main() {
 	led_light := gpio.NewRelayDriver(r, "22")
 
 	mqttAdaptor := mqtt.NewAdaptor(mqttBrokerURL, mqttClientID)
+
+	clearDatabase := func() {
+		dbMutex.Lock()         // Acquire the lock before writing
+		defer dbMutex.Unlock() // Release the lock after writing
+		_, err := db.Exec("DELETE FROM sensors")
+		if err != nil {
+			log.Println("Error clearing database:", err)
+		} else {
+			log.Println("Database cleared.")
+		}
+	}
+
+	// Schedule database clearing every 24 hours
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	go func() {
+		for range ticker.C {
+			log.Println("Initiating daily database clear...")
+			clearDatabase()
+		}
+	}()
 
 	work := func() {
 
@@ -321,6 +367,25 @@ func main() {
 			} else {
 				mqttAdaptor.Publish(mqttTopicPrefix+"/sensors", sensor_data_jSON)
 				fmt.Printf("Published device status: %s\n", string(sensor_data_jSON))
+
+				// Format temperature and humidity to two decimal places
+				formattedTemp := fmt.Sprintf("%.2f", temp)
+				formattedHumidity := fmt.Sprintf("%.2f", humidity)
+
+				// Format the timestamp
+				formattedTime := time.Now().Format("02:01:2006 15:04:05")
+
+				dbMutex.Lock() // Acquire the lock before writing
+				defer dbMutex.Unlock()
+				_, err = db.Exec(`
+					INSERT INTO sensors (temperature, humidity, timestamp)
+					VALUES (?, ?, ?)
+				`, formattedTemp, formattedHumidity, formattedTime)
+				if err != nil {
+					log.Println("Error inserting sensor data into database:", err)
+				} else {
+					fmt.Printf("Temperature: %s°C, Humidity: %s%%, Time: %s - Data written to SQLite.\n", formattedTemp, formattedHumidity, formattedTime)
+				}
 			}
 
 			currentConfig := ConfigStatus{
@@ -328,7 +393,7 @@ func main() {
 				MaxTemperature: target_temperature_max,
 				MinHumidity:    target_humidity_min,
 				MaxHumidity:    target_humidity_max,
-				FanDuration:    fan_run_duration.Minutes(), // Convert to minutes
+				FanDuration:    fan_run_duration.Minutes(),
 				FanInterval:    fan_interval.Minutes(),
 				LightsOnHour:   lights_on_hour_UTC,
 				LightsOffHour:  lights_off_hour_UTC,

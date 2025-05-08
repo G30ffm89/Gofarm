@@ -5,12 +5,15 @@ FROM golang:latest AS builder
 WORKDIR /app
 
 # Copy the Go module definition file
-COPY . .
+COPY go.mod go.sum ./
+
+COPY farm/ .
+COPY mqtt/ .
 
 # Download Go module dependencies
 RUN go mod download -x
 
 # Build the Go application for the farm controller
-RUN go build -o farm_controller farm/farm_control.go
+RUN go build -o farm_controller farm_control.go
 
 CMD ["./farm_controller"]

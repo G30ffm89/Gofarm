@@ -14,174 +14,101 @@
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
 <h1>
-  {{ .time_date }}
+  <span id="current-time"></span>
 </h1>
-  <div id="grid_home">
-    <div id="dials">
-  
-      <div class="card_container">
-        <div class="card">
-          <div class="card-content">
-            <div class="image-container">
-              <div id="heater_led" class="red led"></div>
-            </div>
-            <div class="text-container">
-              <div class="box_title">
-                <h3>Heat Mat </h3>
-              </div>
-              <div class="oandp">
-                <button id="heater-on">On</button>
-                <button id="heater-off">Off</button>
-                <button id="heater-auto">Auto</button>
-              </div>
-            </div>
-          </div>
-        </div>
-  
-        <div class="card">
-          <div class="card-content">
-            <div class="image-container">
-              <div id="fan_led" class="red led"></div>
-            </div>
-            <div class="text-container">
-              <div class="box_title">
-                <h3>Fan</h3>
-              </div>
-              <div class="oandp">
-                <button id="fan-on">On</button>
-                <button id="fan-off">Off</button>
-                <button id="fan-auto">Auto</button>
-              </div>
-            </div>
-          </div>
-        </div>
+
+<div>
+  <div id="heater_led" class="red led"></div>
+  <h3>Heat Mat </h3>
+  <button id="heater-on">On</button>
+  <button id="heater-off">Off</button>
+  <button id="heater-auto">Auto</button>
+</div>
+
+<div>
+  <div id="fan_led" class="red led"></div>
+  <h3>Fan</h3>
+  <button id="fan-on">On</button>
+  <button id="fan-off">Off</button>
+  <button id="fan-auto">Auto</button>
+</div>
     
-        <div class="card">
-          <div class="card-content">
-            <div class="image-container">
-              <div id="lights_led" class="red led"></div>
-            </div>
-            <div class="text-container">
-              <div class="box_title">
-                <h3>Lights</h3>
-              </div>
-              <div class="oandp">
-                <button id="lights-on">On</button>
-                <button id="lights-off">Off</button>
-                <button id="lights-auto">Auto</button>
-
-              </div>
-            </div>
-          </div>
-        </div>
+<div>
+  <div id="lights_led" class="red led"></div>
+  <h3>Lights</h3>
+  <button id="lights-on">On</button>
+  <button id="lights-off">Off</button>
+  <button id="lights-auto">Auto</button>
+</div>
         
-        <div class="card">
-          <div class="card-content">
-            <div class="image-container">
-              <div id="pump_led" class="red led"></div>
-            </div>
-            <div class="text-container">
-              <div class="box_title">
-                <h3>Pump</h3>
-              </div>
-              <div class="oandp">
-                <button id="pump-on">On</button>
-                <button id="pump-off">Off</button>
-                <button id="pump-auto">Auto</button>
-              </div>
-            </div>
-          </div>
-        </div>
+<div class="card">
+  <div id="pump_led" class="red led"></div>
+  <h3>Pump</h3>
+  <button id="pump-on">On</button>
+  <button id="pump-off">Off</button>
+  <button id="pump-auto">Auto</button>
+</div>
 
-        <div class="card">
-          <div class="card-content">
-            <div class="image-container">
-              <div id="mister_led" class="red led"></div>
-            </div>
-            <div class="text-container">
-              <div class="box_title">
-                <h3>Mister</h3>
-              </div>
-              <div class="oandp">
-                <button id="mister-on">On</button>
-                <button id="mister-off">Off</button>
-                <button id="mister-auto">Auto</button>
-                </div>
-              </div>
-            </div>
-        </div>
+<div class="card">
+  <div id="mister_led" class="red led"></div>
+  <h3>Mister</h3>
+  <button id="mister-on">On</button>
+  <button id="mister-off">Off</button>
+  <button id="mister-auto">Auto</button>
+</div>
 
       
-      </div>
-    </div>
   
-    <div id="guages">
-      <div class="gauges-container">
-  
-        <div class="gauge-items">
-          <div id="humid-guage" class="200x160px"></div>
-        </div>
-  
-        <div class="gauge-items">
-          <div id="temp-guage" class="200x160px"></div>
-        </div>
-      </div>
-    </div>
-    <div class="config-controls">
-        <h2>Configuration</h2>
-        <div class="config-item">
-            <label for="temp-min">Min Temperature (°C):</label>
-            <input type="number" id="temp-min" value="15">
-        </div>
-        <div class="config-item">
-            <label for="temp-max">Max Temperature (°C):</label>
-            <input type="number" id="temp-max" value="20">
-        </div>
-        <div class="config-item">
-            <label for="humid-min">Min Humidity (%):</label>
-            <input type="number" id="humid-min" value="70">
-        </div>
-        <div class="config-item">
-            <label for="humid-max">Max Humidity (%):</label>
-            <input type="number" id="humid-max" value="90">
-        </div>
-        <div class="config-item">
-            <label for="fan-duration">Fan Run Duration (mintues):</label>
-            <input type="number" id="fan-duration" value="5">
-        </div>
-        <div class="config-item">
-            <label for="fan-interval">Fan Interval (mintues):</label>
-            <input type="number" id="fan-interval" value="60">
-        </div>
-        <div class="config-item">
-            <label for="lights-on-hour">Lights On Hour (UTC):</label>
-            <input type="number" id="lights-on-hour" value="8">
-        </div>
-        <div class="config-item">
-            <label for="lights-off-hour">Lights Off Hour (UTC):</label>
-            <input type="number" id="lights-off-hour" value="20">
-        </div>
-        <button id="config-button">Apply Configuration</button>
-    </div>
-  
-    <div id="graph">
-    <div class="grid_section_container">
-      <div class="chart">
-        <canvas id="temp_humid_chart" style="width: 800px; height: 400px;"></canvas>
-      </div>
-        <div>
-          <div>
-            <img src="http://192.168.1.170:8081" alt="Live Webcam Stream" width="640" height="480">
-          </div>
-        </div>
-      </div>
-    </div>
+<div id="guages">  
+    <div id="humid-guage" class="200x160px"></div>
+    <div id="temp-guage" class="200x160px"></div>
+</div>
 
+<div class="config-controls">
+    <h2>Configuration</h2>
+    <div class="config-item">
+        <label for="temp-min">Min Temperature (°C):</label>
+        <input type="number" id="temp-min" value="15">
+    </div>
+    <div class="config-item">
+        <label for="temp-max">Max Temperature (°C):</label>
+        <input type="number" id="temp-max" value="20">
+    </div>
+    <div class="config-item">
+        <label for="humid-min">Min Humidity (%):</label>
+        <input type="number" id="humid-min" value="70">
+    </div>
+    <div class="config-item">
+        <label for="humid-max">Max Humidity (%):</label>
+        <input type="number" id="humid-max" value="90">
+    </div>
+    <div class="config-item">
+        <label for="fan-duration">Fan Run Duration (mintues):</label>
+        <input type="number" id="fan-duration" value="5">
+    </div>
+    <div class="config-item">
+        <label for="fan-interval">Fan Interval (mintues):</label>
+        <input type="number" id="fan-interval" value="60">
+    </div>
+    <div class="config-item">
+        <label for="lights-on-hour">Lights On Hour (UTC):</label>
+        <input type="number" id="lights-on-hour" value="8">
+    </div>
+    <div class="config-item">
+        <label for="lights-off-hour">Lights Off Hour (UTC):</label>
+        <input type="number" id="lights-off-hour" value="20">
+    </div>
+    <button id="config-button">Apply Configuration</button>
+</div>
+  
+  <div class="chart">
+    <canvas id="temp_humid_chart" style="height: 400px;"></canvas>
   </div>
-<script src='/static/js/update.js' type='text/javascript'></script>
-
+  <div>
+    <img src="http://192.168.1.170:8081" alt="Live Webcam Stream" width="640" height="480">
+  </div>
 <footer>
+  <script src='/static/js/update.js' type='text/javascript'></script>
 </footer>
-<script src='/static/js/main.js' type='text/javascript'></script>
 </body>
 </html>
