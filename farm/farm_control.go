@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -21,6 +22,8 @@ const (
 	mqttBrokerURL   = "tcp://mos1:1883"
 	mqttClientID    = "farm-controller"
 	mqttTopicPrefix = "farm/sensors"
+	maxRetries      = 3
+	retryInterval   = 2 * time.Second
 )
 
 type DeviceState struct {
@@ -30,6 +33,12 @@ type DeviceState struct {
 	Mister     int    `json:"mister"`
 	Lights     int    `json:"lights"`
 	LastFanRun string `json:"last_fan_run"`
+	PumpOver   string `json:"pump_over"`
+	HeaterOver string `json:"heater_over"`
+	FanOver    string `json:"fan_over"`
+	MisterOver string `json:"mister_over"`
+	LightsOver string `json:"lights_over"`
+	Error      string `json:"error"`
 }
 
 type Override struct {
@@ -52,6 +61,7 @@ var overrides = map[string]string{
 	"fan":    "no override",
 	"mister": "no override",
 	"lights": "no override",
+	"error":  "no error",
 }
 
 var dbMutex sync.Mutex // Used for database to stop the program from spazzing if the bot tries to write while the db is open
@@ -87,7 +97,7 @@ func main() {
 
 	db, err := sql.Open("sqlite3", "/app/sensor_data.db") //location INSIDE THE DOCKER CONTAINER
 	if err != nil {
-		log.Fatal("Error opening database:", err)
+		log.Fatalf("Error opening database: %v", err)
 	}
 	defer db.Close()
 
@@ -100,7 +110,7 @@ func main() {
 		)
 	`)
 	if err != nil {
-		log.Fatal("Error creating sensors table:", err)
+		log.Fatalf("Error creating sensors table: %v", err)
 	}
 
 	r := raspi.NewAdaptor()
@@ -113,18 +123,45 @@ func main() {
 
 	mqttAdaptor := mqtt.NewAdaptor(mqttBrokerURL, mqttClientID)
 
-	clearDatabase := func() {
-		dbMutex.Lock()         // Acquire the lock before writing
-		defer dbMutex.Unlock() // Release the lock after writing
-		_, err := db.Exec("DELETE FROM sensors")
-		if err != nil {
-			log.Println("Error clearing database:", err)
+	sendMQTTAlert := func(message string) {
+		if mqttAdaptor != nil { // Check if mqttAdaptor is not nil and connected
+			mqttAdaptor.Publish(mqttTopicPrefix+"/alerts", []byte(message))
+			log.Println("MQTT alert sent:", message)
 		} else {
-			log.Println("Database cleared.")
+			log.Println("MQTT not connected, cannot send alert:", message)
 		}
 	}
 
-	// Schedule database clearing every 24 hours
+	clearDatabase := func() {
+		dbMutex.Lock()         // Acquire the lock before writing
+		defer dbMutex.Unlock() // Release the lock after writing
+
+		// 1. Delete all rows from the sensors table
+		_, err := db.Exec("DELETE FROM sensors")
+		if err != nil {
+			log.Println("Error clearing sensors table:", err)
+			sendMQTTAlert("Error clearing database (DELETE): " + err.Error())
+			overrides["error"] = "database clear failed (delete)"
+		} else {
+			log.Println("Sensors table cleared.")
+		}
+
+		_, seqErr := db.Exec("DELETE FROM sqlite_sequence WHERE name='sensors'")
+		if seqErr != nil {
+			log.Println("Error resetting sequence for sensors table:", seqErr)
+			errMsg := "database clear failed (seq reset): " + seqErr.Error()
+			if err != nil {
+				errMsg = "database clear failed (delete & seq reset): " + err.Error() + "; " + seqErr.Error()
+			}
+			sendMQTTAlert(errMsg) // Send MQTT alert
+			overrides["error"] = errMsg
+		} else {
+			log.Println("Auto-increment sequence for sensors table reset.")
+			if err == nil {
+				overrides["error"] = "none"
+			}
+		}
+	}
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
@@ -134,6 +171,26 @@ func main() {
 			clearDatabase()
 		}
 	}()
+
+	readSensorData := func() (float32, float32, error) {
+		var temp float32
+		var humidity float32
+		var err error
+		for i := 0; i < maxRetries; i++ {
+			temp, err = sht2x.Temperature()
+			if err == nil {
+				humidity, err = sht2x.Humidity()
+				if err == nil {
+					return temp, humidity, nil // Success
+				}
+			}
+			log.Printf("Error reading sensor data (attempt %d): %v\n", i+1, err)
+			time.Sleep(retryInterval)
+		}
+		sendMQTTAlert("Failed to read sensor data after " + strconv.Itoa(maxRetries) + " attempts: " + err.Error())
+		overrides["error"] = "sensor read failed"
+		return 0, 0, err // Return the last error
+	}
 
 	work := func() {
 
@@ -215,19 +272,13 @@ func main() {
 			last_fan_run = time.Now()
 		}
 
-		gobot.Every(5*time.Second, func() {
+		gobot.Every(10*time.Second, func() {
 			now_UTC := time.Now().UTC()
 			hour_UTC := now_UTC.Hour()
-			temp, err := sht2x.Temperature()
+			temp, humidity, err := readSensorData()
 			if err != nil {
-				log.Println("Error reading temperature:", err)
-				return
-			}
-
-			humidity, err := sht2x.Humidity()
-			if err != nil {
-				log.Println("Error reading humidity:", err)
-				return
+				log.Println("Error reading sensor data:", err)
+				return // IMPORTANT:  Return from the gobot.Every callback on error
 			}
 			// fucked up the on/off need to change the wiring in the future
 			if overrides["lights"] == "on" {
@@ -347,6 +398,12 @@ func main() {
 				Mister:     mister_state,
 				Lights:     light_state,
 				LastFanRun: last_fan_run.Format(time.RFC3339),
+				PumpOver:   overrides["pump"],
+				HeaterOver: overrides["heater"],
+				FanOver:    overrides["fan"],
+				MisterOver: overrides["mister"],
+				LightsOver: overrides["lights"],
+				Error:      overrides["error"], // Include the error status
 			}
 			device_state_json, err := json.Marshal(device_state)
 			if err != nil {
@@ -373,18 +430,19 @@ func main() {
 				formattedHumidity := fmt.Sprintf("%.2f", humidity)
 
 				// Format the timestamp
-				formattedTime := time.Now().Format("02:01:2006 15:04:05")
-
 				dbMutex.Lock() // Acquire the lock before writing
 				defer dbMutex.Unlock()
 				_, err = db.Exec(`
 					INSERT INTO sensors (temperature, humidity, timestamp)
 					VALUES (?, ?, ?)
-				`, formattedTemp, formattedHumidity, formattedTime)
+				`, formattedTemp, formattedHumidity, time.Now())
 				if err != nil {
 					log.Println("Error inserting sensor data into database:", err)
+					sendMQTTAlert("Database insert error: " + err.Error()) //send mqtt alert
+					overrides["error"] = "db insert failed"
 				} else {
-					fmt.Printf("Temperature: %s°C, Humidity: %s%%, Time: %s - Data written to SQLite.\n", formattedTemp, formattedHumidity, formattedTime)
+					fmt.Printf("Temperature: %s°C, Humidity: %s%%, Time: %s - Data written to SQLite.\n", formattedTemp, formattedHumidity, time.Now())
+					overrides["error"] = "none"
 				}
 			}
 

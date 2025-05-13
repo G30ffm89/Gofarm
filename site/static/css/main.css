@@ -1,53 +1,116 @@
 @keyframes chartjs-render-animation{from{opacity:.99}to{opacity:1}}.chartjs-render-monitor{animation:chartjs-render-animation 1ms}.chartjs-size-monitor,.chartjs-size-monitor-expand,.chartjs-size-monitor-shrink{position:absolute;direction:ltr;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;visibility:hidden;z-index:-1}.chartjs-size-monitor-expand>div{position:absolute;width:1000000px;height:1000000px;left:0;top:0}.chartjs-size-monitor-shrink>div{position:absolute;width:200%;height:200%;left:0;top:0}
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    font-size: 18px;
-    font-family: "Ubuntu Mono", monospace;
+html, body {
+  height: 100%;
+  font-size: 18px;
+  font-family: "Ubuntu Mono", monospace;
+  box-sizing: border-box;
 }
 
-html, body {
-    height: 100%;
+*, *:before, *:after {
+  box-sizing: inherit; 
 }
+
 
 h2 {
-    font-size: 22px;
-    margin-bottom: 36px;
-    position: relative;
-    top: -9px;
+  font-size: 22px;
+  margin-bottom: 20px; 
+  position: relative;
+  margin-top: 0; 
 }
-
-.green {
-    background-color: #13fB04 ;
-    box-shadow: 0px 0px 3px #13fB04;
-    
-}
-
-.red {
-    background-color: #fb1304;
-    box-shadow: 0px 0px 3px #fb1304;
-}
-
 
 .led {
-    border-radius: 3px;
-    width: 7px;
-    height: 7px;
-    margin: 5px;
-    zoom: 5;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #ddd;
+  margin-right: 10px;
+  box-shadow: 0 0 5px #666;
 }
 
-.led:after {
-    display: block;            
-    content: '';
-    margin-left: 1px;
-    margin-right: 1px;
-    width: 8px;
-    height: 6px;
-    -webkit-border-top-right-radius: 4px 3px;
-    -webkit-border-top-left-radius: 4px 3px;
-    -webkit-border-bottom-right-radius: 4px 3px;
-    -webkit-border-bottom-left-radius: 4px 3px;
+.led.green {
+  background-color: #0f0;
+  box-shadow: 0 0 10px #0f0;
 }
+
+.led.red {
+  background-color: #f00;
+  box-shadow: 0 0 10px #f00;
+}
+
+
+.led-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.led-controls button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  background-color: #4CAF50;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.led-controls button:hover {
+  background-color: #367c39;
+}
+
+.led-controls button:disabled,
+.led-controls button.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+.config-controls {
+
+  padding: 20px;
+  border-radius: 5px;
+  border: 1px solid #ccc; /* Example border */
+}
+
+.config-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.config-item label {
+  margin-right: 10px; 
+  flex-basis: 60%; 
+}
+
+.config-item input {
+  flex-basis: 35%; 
+  padding: 5px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+#config-button {
+  display: block; /* Make button take full width of its container */
+  width: 100%;
+  padding: 10px;
+  margin-top: 20px; 
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+#config-button:hover {
+  background-color: #0056b3;
+}
+
+#humid-guage, #temp-guage {
+  min-height: 160px; 
+  min-width: 200px; 
+  border: 1px dashed #aaa;
+}
+

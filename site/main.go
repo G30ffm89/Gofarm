@@ -13,9 +13,9 @@ import (
 
 // SensorData struct to hold data from the database
 type SensorData struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Temperature float64   `json:"temperature"`
-	Humidity    float64   `json:"humidity"`
+	Value       string  `json:"timestamp"`
+	Temperature float64 `json:"temperature"`
+	Humidity    float64 `json:"humidity"`
 }
 
 func main() {
@@ -53,20 +53,21 @@ func main() {
 	// New API endpoint to get a maximum of 30 sensor data points
 	router.GET("/api/sensor_data", func(c *gin.Context) {
 		var totalRows int
-		err = db.QueryRow("SELECT COUNT(*) FROM sensors").Scan(&totalRows)
+		err := db.QueryRow("SELECT COUNT(*) FROM sensors").Scan(&totalRows)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error counting rows: " + err.Error()})
 			return
 		}
 
 		var step int
-		if totalRows <= 30 {
+		if totalRows <= 200 {
 			step = 1 // Show all if there are 30 or fewer rows
 		} else {
-			step = int(math.Ceil(float64(totalRows) / 30.0)) // Calculate the interval
+			step = int(math.Ceil(float64(totalRows) / 200.0)) // Calculate the interval
 		}
 
-		rows, err := db.Query("SELECT timestamp, temperature, humidity FROM sensors ORDER BY timestamp ASC")
+		rows, err := db.Query(`
+		SELECT COALESCE(strftime('%d:%m:%Y %H:%M:%S', SUBSTR(TRIM(timestamp), 1, 19)), ''), temperature, humidity FROM sensors ORDER BY id ASC`)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error querying data: " + err.Error()})
 			return
@@ -77,11 +78,14 @@ func main() {
 		count := 0
 		for rows.Next() {
 			var reading SensorData
-			err := rows.Scan(&reading.Timestamp, &reading.Temperature, &reading.Humidity)
+
+			// Scan the timestamp as a string first.
+			err = rows.Scan(&reading.Value, &reading.Temperature, &reading.Humidity)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning row: " + err.Error()})
 				return
 			}
+
 			if count%step == 0 {
 				filteredReadings = append(filteredReadings, reading)
 			}

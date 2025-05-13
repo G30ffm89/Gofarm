@@ -2,6 +2,7 @@ let humid_gauge;
 let temp_guage;
 let thchart;
 let initialConfigLoaded = false;
+let currentDeviceState = {}; // To store the latest device state
 
 // MQTT Configuration
 const mqttBroker = 'ws://192.168.1.170:9001';
@@ -11,6 +12,7 @@ const mqttTopicDevices = 'farm/sensors/devices';
 const mqttTopicOverride = 'farm/sensors/override';
 const mqttTopicConfigSet = 'farm/sensors/config';
 const mqttTopicConfigStatus = 'farm/sensors/status';
+const mqttTopicAlerts = 'farm/sensors/alerts';
 
 function connectMQTT() {
     client = mqtt.connect(mqttBroker, { clientId: mqttClientId });
@@ -38,6 +40,13 @@ function connectMQTT() {
                 console.log('MQTT: Subscribed to', mqttTopicConfigStatus);
             }
         });
+        client.subscribe(mqttTopicAlerts, { qos: 0 }, function (err) { // Add this
+            if (err) {
+                console.error('MQTT: Error subscribing to', mqttTopicAlerts, err);
+            } else {
+                console.log('MQTT: Subscribed to', mqttTopicAlerts);
+            }
+        });
     });
 
     client.on('error', function (err) {
@@ -48,18 +57,22 @@ function connectMQTT() {
         try {
             const data = JSON.parse(payload.toString());
             console.log('MQTT: Received message on', topic, 'with payload:', data);
-    
+
             if (topic === mqttTopicSensors) {
                 handleSensorData(data);
             } else if (topic === mqttTopicDevices) {
+                currentDeviceState = data; // Store the latest device state
                 handleDeviceState(data);
+                updateOverrideButtonStates(data); // Update button states
             } else if (topic === mqttTopicConfigStatus) {
                 if (!initialConfigLoaded) {
                     updateConfigForm(data);
                     initialConfigLoaded = true;
-                    client.unsubscribe(mqttTopicConfigStatus); // Unsubscribe after first message
+                    client.unsubscribe(mqttTopicConfigStatus);
                     console.log('MQTT: Unsubscribed from', mqttTopicConfigStatus);
                 }
+            } else if (topic === mqttTopicAlerts) {
+                handleAlert(payload.toString());
             }
         } catch (error) {
             console.error('MQTT: Error parsing message on', topic, error);
@@ -79,45 +92,27 @@ function connectMQTT() {
     });
 }
 
-
 // Function to handle sensor data
 function handleSensorData(data) {
-    if (humid_gauge) humid_gauge.refresh(data.humidity);
-    if (temp_guage) temp_guage.refresh(data.temperature);
-
-    if (thchart) {
-        const timeLabel = data.map(item => {
-            const date = new Date(item.timestamp);
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
-            const year = date.getFullYear();
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            return `${day}-${month}-${year} ${hours}:${minutes}`;
-        });
-        thchart.data.labels.push(timeLabel);
-        thchart.data.datasets[0].data.push(data.temperature);
-        thchart.data.datasets[1].data.push(data.humidity);
-        if (thchart.data.labels.length > 20) {
-            thchart.data.labels.shift();
-            thchart.data.datasets[0].data.shift();
-            thchart.data.datasets[1].data.shift();
-        }
-        thchart.update();
+    console.log("Humidity received:", data.humidity, typeof data.humidity);
+    if (humid_gauge) {
+      console.log("Refreshing humid_gauge with:", data.humidity); //debugging 
+      humid_gauge.refresh(data.humidity);
     }
+    if (temp_guage) temp_guage.refresh(data.temperature);
 }
 
 function handleDeviceState(data) {
-    update_led_state(data.pump, 'pump_led'); 
+    update_led_state(data.pump, 'pump_led');
     update_led_state(data.heater, 'heater_led');
-    update_led_state(data.fan, 'fan_led');     // Use lowercase 'fan'
-    update_led_state(data.mister, 'mister_led'); // Use lowercase 'mister'
-    update_led_state(data.lights, 'lights_led'); // Use lowercase 'lights'
+    update_led_state(data.fan, 'fan_led');
+    update_led_state(data.mister, 'mister_led');
+    update_led_state(data.lights, 'lights_led');
 }
 
 function update_led_state(state, ledId) {
     const led_element = document.getElementById(ledId);
-    
+
     if (led_element) {
         if (state === 1) {
             led_element.classList.add('green');
@@ -150,8 +145,8 @@ function setConfig() {
     const tempMaxInput = document.getElementById('temp-max');
     const humidMinInput = document.getElementById('humid-min');
     const humidMaxInput = document.getElementById('humid-max');
-    const fanDurationInputMin = document.getElementById('fan-duration');
-    const fanIntervalInputMin = document.getElementById('fan-interval');
+    const fanDurationInput = document.getElementById('fan-duration');
+    const fanIntervalInput = document.getElementById('fan-interval');
     const lightsOnInput = document.getElementById('lights-on-hour');
     const lightsOffInput = document.getElementById('lights-off-hour');
 
@@ -159,75 +154,77 @@ function setConfig() {
 
     if (tempMinInput) {
         config.target_temperature_min = parseFloat(tempMinInput.value);
-      } else {
+    } else {
         console.error("Element with id 'temp-min' not found");
-        return; // Stop execution if a required element is missing
-      }
-      if (tempMaxInput) {
+        return;
+    }
+    if (tempMaxInput) {
         config.target_temperature_max = parseFloat(tempMaxInput.value);
-      } else {
+    } else {
         console.error("Element with id 'temp-max' not found");
         return;
-      }
-      if (humidMinInput) {
+    }
+    if (humidMinInput) {
         config.target_humidity_min = parseFloat(humidMinInput.value);
-      } else {
+    } else {
         console.error("Element with id 'humid-min' not found");
         return;
-      }
-  
-      if (humidMaxInput) {
+    }
+
+    if (humidMaxInput) {
         config.target_humidity_max = parseFloat(humidMaxInput.value);
-      } else {
+    } else {
         console.error("Element with id 'humid-max' not found");
         return;
-      }
-  
-  
-      if (fanDurationInputMin) {
-          config.fan_run_duration = parseFloat(fanDurationInputMin.value) * 60;
-      } else {
-        console.error("Element with id 'fan-duration-min' not found");
+    }
+
+
+    if (fanDurationInput) {
+        // Use the same property name as updateConfigForm expects
+        config.fan_run_duration_minutes = parseFloat(fanDurationInput.value);
+   } else {
+        console.error("Element with id 'fan-duration' not found"); // Corrected error message
         return;
-      }
-      if (fanIntervalInputMin) {
-          config.fan_interval = parseFloat(fanIntervalInputMin.value) * 60;
-      } else {
-         console.error("Element with id 'fan-interval-min' not found");
-         return;
-      }
-  
-      if (lightsOnInput) {
-          config.lights_on_hour_UTC = parseInt(lightsOnInput.value);
-      } else {
-         console.error("Element with id 'lights-on-hour' not found");
-         return;
-      }
-  
-      if (lightsOffInput) {
-          config.lights_off_hour_UTC = parseInt(lightsOffInput.value);
-      } else {
-         console.error("Element with id 'lights-off-hour' not found");
-         return;
-      }
-  
-  
-      if (client && client.connected) {
-          const jsonPayload = JSON.stringify(config);
-          client.publish(mqttTopicConfigSet, jsonPayload, { qos: 0, retain: false });
-          console.log('MQTT: Published config change:', config, 'to', mqttTopicConfigSet);
-      } else {
-          console.error('MQTT: Not connected, cannot publish config.');
-      }
-  }
-  
+   }
+   if (fanIntervalInput) {
+        // Use the same property name as updateConfigForm expects
+        config.fan_interval_minutes = parseFloat(fanIntervalInput.value);
+   } else {
+        console.error("Element with id 'fan-interval' not found"); // Corrected error message
+        return;
+   }
+
+    if (lightsOnInput) {
+        config.lights_on_hour_UTC = parseInt(lightsOnInput.value);
+    } else {
+        console.error("Element with id 'lights-on-hour' not found");
+        return;
+    }
+
+    if (lightsOffInput) {
+        config.lights_off_hour_UTC = parseInt(lightsOffInput.value);
+    } else {
+        console.error("Element with id 'lights-off-hour' not found");
+        return;
+    }
+
+
+    if (client && client.connected) {
+        const jsonPayload = JSON.stringify(config);
+        client.publish(mqttTopicConfigSet, jsonPayload, { qos: 0, retain: false });
+        console.log('MQTT: Published config change:', config, 'to', mqttTopicConfigSet);
+    } else {
+        console.error('MQTT: Not connected, cannot publish config.');
+    }
+}
+
 function updateConfigForm(config) {
     const tempMinInput = document.getElementById('temp-min');
     const tempMaxInput = document.getElementById('temp-max');
     const humidMinInput = document.getElementById('humid-min');
     const humidMaxInput = document.getElementById('humid-max');
-    const fanDurationInputMin = document.getElementById('fan-duration');
-    const fanIntervalInputMin = document.getElementById('fan-interval');
+    const fanDurationInput = document.getElementById('fan-duration');
+    const fanIntervalInput = document.getElementById('fan-interval');
     const lightsOnInput = document.getElementById('lights-on-hour');
     const lightsOffInput = document.getElementById('lights-off-hour');
 
@@ -235,20 +232,91 @@ function updateConfigForm(config) {
     if (tempMaxInput) tempMaxInput.value = config.target_temperature_max;
     if (humidMinInput) humidMinInput.value = config.target_humidity_min;
     if (humidMaxInput) humidMaxInput.value = config.target_humidity_max;
-    if (fanDurationInputMin) fanDurationInputMin.value = config.fan_run_duration;
-    if (fanIntervalInputMin) fanIntervalInputMin.value = config.fan_interval;
+    if (fanDurationInput) fanDurationInput.value = config.fan_run_duration_minutes;
+    if (fanIntervalInput) fanIntervalInput.value = config.fan_interval_minutes;
     if (lightsOnInput) lightsOnInput.value = config.lights_on_hour_UTC;
     if (lightsOffInput) lightsOffInput.value = config.lights_off_hour_UTC;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+function handleAlert(alertMessage) {
+    console.warn('Received Alert:', alertMessage);
+    const alertContainer = document.getElementById('alert-container');
+    if (alertContainer) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger';
+        alertDiv.textContent = alertMessage;
+        alertContainer.appendChild(alertDiv);
+
+        setTimeout(() => alertDiv.remove(), 5000);
+    } else {
+        console.error('alert-container not found');
+        alert(alertMessage)
+    }
+}
+
+ // *** CORRECTED FUNCTION ***
+ // This function now disables the button that represents the current active override state.
+ function setButtonState(buttonId, isActiveState) {
+    const button = document.getElementById(buttonId);
+    if (button) {
+        // Disable the button if it represents the current state (isActiveState is true)
+        button.disabled = isActiveState;
+
+        // Add/remove the 'disabled' class for styling based on the button's disabled status
+        if (button.disabled) {
+            button.classList.add('disabled'); // Style as disabled/inactive
+        } else {
+            button.classList.remove('disabled'); // Style as enabled/active
+        }
+    } else {
+         console.error(`Button element not found: ${buttonId}`);
+    }
+}
+
+function updateOverrideButtonStates(deviceState) {
+    const getOverride = (dev) => deviceState[`${dev}_over`] || "no override";
+
+    const pumpOverride = getOverride('pump');
+    const heaterOverride = getOverride('heater');
+    const fanOverride = getOverride('fan');
+    const misterOverride = getOverride('mister');
+    const lightsOverride = getOverride('lights');
+
+    // --- Pump Buttons ---
+    // Disable 'pump-on' if pumpOverride is 'on'
+    setButtonState('pump-on', pumpOverride === 'on');
+    setButtonState('pump-off', pumpOverride === 'off');
+    setButtonState('pump-auto', pumpOverride === 'no override');
+
+    // --- Heater Buttons ---
+    setButtonState('heater-on', heaterOverride === 'on');
+    setButtonState('heater-off', heaterOverride === 'off');
+    setButtonState('heater-auto', heaterOverride === 'no override');
+
+    // --- Fan Buttons ---
+    setButtonState('fan-on', fanOverride === 'on');
+    setButtonState('fan-off', fanOverride === 'off');
+    setButtonState('fan-auto', fanOverride === 'no override');
+
+    // --- Mister Buttons ---
+    setButtonState('mister-on', misterOverride === 'on');
+    setButtonState('mister-off', misterOverride === 'off');
+    setButtonState('mister-auto', misterOverride === 'no override');
+
+    // --- Lights Buttons ---
+    setButtonState('lights-on', lightsOverride === 'on');
+    setButtonState('lights-off', lightsOverride === 'off');
+    setButtonState('lights-auto', lightsOverride === 'no override');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
     const ctx = document.getElementById('temp_humid_chart');
-    let thchart; // Declare the chart variable outside the function
-    const updateInterval = 5 * 60 * 1000; // Update every 5 minutes (in milliseconds)
+    let thchart;
+    const updateInterval = 5 * 60 * 1000;
 
     function createChart(temperature = [], humidity = [], timeLabel = []) {
-        if (thchart) { // Check if a chart instance already exists
-            thchart.destroy(); // Destroy the existing chart to update it
+        if (thchart) {
+            thchart.destroy();
         }
         thchart = new Chart(ctx, {
             type: 'line',
@@ -259,23 +327,23 @@ document.addEventListener('DOMContentLoaded', function() {
                         label: 'Temperature',
                         data: temperature,
                         yAxisID: 'y',
-                        borderColor: 'rgba(255, 99, 132, 1)', // Example color
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)', // Example background color
-                        tension: 0.1 // Smoother lines
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.1
                     },
                     {
                         label: 'Humidity',
                         data: humidity,
                         yAxisID: 'y1',
-                        borderColor: 'rgba(54, 162, 235, 1)', // Example color
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)', // Example background color
-                        tension: 0.1 // Smoother lines
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        tension: 0.1
                     }
                 ]
             },
             options: {
                 scales: {
-                    y:{
+                    y: {
                         type: 'linear',
                         display: true,
                         position: 'left',
@@ -284,12 +352,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             text: 'Temperature (°C)'
                         }
                     },
-                    y1:{
+                    y1: {
                         type: 'linear',
                         display: true,
                         position: 'right',
                         grid: {
-                            drawOnChartArea: false // Don't draw grid lines on the chart area
+                            drawOnChartArea: false
                         },
                         title: {
                             display: true,
@@ -309,7 +377,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Function to fetch data from the API
     async function fetchData() {
         try {
             const response = await fetch('/api/sensor_data');
@@ -318,15 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             const data = await response.json();
 
-            const formattedTimestamps = data.map(item => {
-                const date = new Date(item.timestamp);
-                const day = String(date.getDate()).padStart(2, '0');
-                const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
-                const year = date.getFullYear();
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-                return `${hours}:${minutes} ${day}-${month}`; // More concise time format
-            });// Format timestamp as needed
+            const formattedTimestamps = data.map(item => item.timestamp);
             const temperatures = data.map(item => item.temperature);
             const humidities = data.map(item => item.humidity);
 
@@ -334,17 +393,59 @@ document.addEventListener('DOMContentLoaded', function() {
 
         } catch (error) {
             console.error('Error fetching sensor data:', error);
-            // Optionally display an error message on the page
         }
     }
 
-    // Call fetchData when the page loads
     fetchData();
-
-    // Periodically update the chart by fetching data again
     setInterval(fetchData, updateInterval);
-    humid_gauge = new JustGage({ id: "humid-guage", title: "Humidity", label: "%", value: 0, min: 0, max: 100 });
-    temp_guage = new JustGage({ id: "temp-guage", title: "Temperature", label: "°C", value: 0, min: 0, max: 30 });
+    humid_gauge = new JustGage({ 
+        id: "humid-guage", 
+        label: "Humidity", 
+        decimals: 2,
+        valueFontFamily: "Ubuntu Mono",
+        min: 0, 
+        max: 100,
+        value: 0,
+        pointer: true,
+        symbol: "%",
+        gaugeWidthScale: 0.6,
+        customSectors: {
+            percents: true,
+            ranges: [
+              {lo: 0, hi: 60, color: '#FF4500'},
+              {lo: 61, hi: 75, color: '#FFA500'},
+              {lo: 76, hi: 90, color: '#00FF00'},
+              {lo: 91, hi: 100, color: '#2E8B57'}
+            ],
+            levelColorGradient: false
+          },
+        counter: true
+    });
+    temp_guage = new JustGage({ 
+        id: "temp-guage",  
+        label: "Temperature", 
+        value: 0, 
+        min: 0, 
+        max: 30,
+        decimals: 2,
+        valueFontFamily: "Ubuntu Mono",
+        pointer: true,
+        symbol: "°C",
+        gaugeWidthScale: 0.6,
+        customSectors: {
+            ranges: [
+              {lo: 0, hi: 5, color: '#2E8B57'}, 
+              {lo: 6, hi: 12, color: '#228B22'},
+              {lo: 13, hi: 19, color: '#00FF00'},
+              {lo: 20, hi: 24, color: '#FFA500'},
+              {lo: 25, hi: 30, color: '#FF4500'}
+            ],
+            levelColorGradient: false
+          },
+        counter: true
+
+    
+    });
 
     connectMQTT();
 
@@ -352,61 +453,62 @@ document.addEventListener('DOMContentLoaded', function() {
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
         ];
-        const month = monthNames[now.getMonth()]; // Month is 0-indexed
+        const month = monthNames[now.getMonth()];
         const year = now.getFullYear();
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
-    
+
         const formattedTime = `${day} ${month} ${year} - ${hours}:${minutes}`;
-    
+
         document.getElementById('current-time').textContent = formattedTime;
     }
 
-    // Update the time every second (you can adjust the interval)
     setInterval(updateTime, 1000);
-
-    // Initial call to display the time immediately on load
     updateTime();
 
-    const pumpOnButton = document.getElementById('pump-on');
-    const pumpOffButton = document.getElementById('pump-off');
-    const pumpAutoButton = document.getElementById('pump-auto');
-    const heaterOnButton = document.getElementById('heater-on');
-    const heaterOffButton = document.getElementById('heater-off');
-    const heaterAutoButton = document.getElementById('heater-auto');
-    const fanOnButton = document.getElementById('fan-on');
-    const fanOffButton = document.getElementById('fan-off');
-    const fanAutoButton = document.getElementById('fan-auto');
-    const misterOnButton = document.getElementById('mister-on');
-    const misterOffButton = document.getElementById('mister-off');
-    const misterAutoButton = document.getElementById('mister-auto');
-    const lightsOnButton = document.getElementById('lights-on');
-    const lightsOffButton = document.getElementById('lights-off');
-    const lightsAutoButton = document.getElementById('lights-auto');
+ // --- Add Event Listeners for Override Buttons ---
+     // Helper function to add listeners safely
+     const addButtonListener = (id, device, state) => {
+        const button = document.getElementById(id);
+        if (button) {
+            button.addEventListener('click', () => setDeviceState(device, state));
+        } else {
+            console.error(`Button element not found: ${id}`);
+        }
+    };
 
-    if (pumpOnButton) pumpOnButton.addEventListener('click', () => setDeviceState('pump', 'on'));
-    if (pumpOffButton) pumpOffButton.addEventListener('click', () => setDeviceState('pump', 'off'));
-    if (pumpAutoButton) pumpAutoButton.addEventListener('click', () => setDeviceState('pump', 'no override'));
-    if (heaterOnButton) heaterOnButton.addEventListener('click', () => setDeviceState('heater', 'on'));
-    if (heaterOffButton) heaterOffButton.addEventListener('click', () => setDeviceState('heater', 'off'));
-    if (heaterAutoButton) heaterAutoButton.addEventListener('click', () => setDeviceState('heater', 'no override'));
-    if (fanOnButton) fanOnButton.addEventListener('click', () => setDeviceState('fan', 'on'));
-    if (fanOffButton) fanOffButton.addEventListener('click', () => setDeviceState('fan', 'off'));
-    if (fanAutoButton) fanAutoButton.addEventListener('click', () => setDeviceState('fan', 'no override'));
-    if (misterOnButton) misterOnButton.addEventListener('click', () => setDeviceState('mister', 'on'));
-    if (misterOffButton) misterOffButton.addEventListener('click', () => setDeviceState('mister', 'off'));
-    if (misterAutoButton) misterAutoButton.addEventListener('click', () => setDeviceState('mister', 'no override'));
-    if (lightsOnButton) lightsOnButton.addEventListener('click', () => setDeviceState('lights', 'on'));
-    if (lightsOffButton) lightsOffButton.addEventListener('click', () => setDeviceState('lights', 'off'));
-    if (lightsAutoButton) lightsAutoButton.addEventListener('click', () => setDeviceState('lights', 'no override'));
+    // Pump
+    addButtonListener('pump-on', 'pump', 'on');
+    addButtonListener('pump-off', 'pump', 'off');
+    addButtonListener('pump-auto', 'pump', 'no override');
+
+    // Heater
+    addButtonListener('heater-on', 'heater', 'on');
+    addButtonListener('heater-off', 'heater', 'off');
+    addButtonListener('heater-auto', 'heater', 'no override');
+
+    // Fan
+    addButtonListener('fan-on', 'fan', 'on');
+    addButtonListener('fan-off', 'fan', 'off');
+    addButtonListener('fan-auto', 'fan', 'no override');
+
+    // Mister
+    addButtonListener('mister-on', 'mister', 'on');
+    addButtonListener('mister-off', 'mister', 'off');
+    addButtonListener('mister-auto', 'mister', 'no override');
+
+    // Lights
+    addButtonListener('lights-on', 'lights', 'on');
+    addButtonListener('lights-off', 'lights', 'off');
+    addButtonListener('lights-auto', 'lights', 'no override');
 
     const configButton = document.getElementById('config-button');
     if (configButton) {
         configButton.addEventListener('click', () => {
             setConfig();
-            initialConfigLoaded = true; // Set the flag after user interaction
+            initialConfigLoaded = true;
             if (client && client.connected) {
                 client.unsubscribe(mqttTopicConfigStatus);
                 console.log('MQTT: Unsubscribed from', mqttTopicConfigStatus);
