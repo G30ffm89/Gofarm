@@ -19,6 +19,79 @@ h2 {
   margin-top: 0; 
 }
 
+#grid_home {
+	display: grid;
+  grid-template-rows: auto auto auto auto auto auto; /* You might need to adjust the number of 'auto' or use different units based on actual content */
+  grid-template-columns: repeat(4, 1fr); /* 4 equal columns */
+	gap: 5px;
+  padding: 20px;
+	width: 100%;
+	height: 100%;
+  padding-bottom: 1rem;
+}
+
+#led-container {
+	grid-area: 2 / 1 / 3 / 5; /* Stays in Row 2, spans all 4 columns */
+}
+
+/* These three will now be on the same row (Row 3) */
+#guage-container {
+	grid-area: 3 / 1 / 4 / 2; /* Row 3, spans from column line 1 to 2 (1 column) */
+}
+#config-container {
+	grid-area: 3 / 2 / 4 / 3; /* Row 3, spans from column line 2 to 3 (1 column) */
+}
+#camera-container {
+	grid-area: 3 / 3 / 4 / 5; /* Row 3, spans from column line 3 to 5 (2 columns) */
+}
+#chart-container {
+	grid-area: 4 / 1 / 5 / 5; /* Moved up to Row 4, spans all 4 columns */
+}
+
+
+.guage {
+  display: flex;
+  flex-direction: column; /* Stack items vertically */
+  /* flex-wrap is usually not needed for a simple column layout
+     unless the content inside each item is very tall and you want wrapping */
+  justify-content: center; /* Align items vertically in the center within the .guage container */
+  align-items: center; /* Align items horizontally in the center within the .guage container */
+  width: 100%; /* Ensure the .guage container takes up the full width of its grid cell */
+  gap: 10px; /* Add some space between the vertically stacked gauges */
+}
+#humid-guage,
+#temp-guage {
+  box-sizing: border-box;   
+  flex: 1 1 200px;
+  flex-grow: 1;
+  flex-shrink: 1;
+
+  max-width: 100%; /* Prevent them from growing beyond their intended max size if there's a lot of space */
+  /* You might still want a height, or manage aspect ratio differently */
+  box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}
+.card-container{
+  display:flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-around;
+}
+
+
+.card {
+  min-width: 15em;
+  border: 1px solid #ccc;
+  background-color: rgba(255, 255, 255, 0.5);
+  margin: 5px;
+  border-radius: 5px;
+  overflow: hidden;  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-content: stretch;
+  align-items: start;
+  flex-wrap: wrap;
+  padding: 10px;
+}
 .led {
   width: 24px;
   height: 24px;
@@ -44,6 +117,7 @@ h2 {
   gap: 5px;
 }
 
+
 .led-controls button {
   padding: 10px 20px;
   border: none;
@@ -64,6 +138,13 @@ h2 {
   cursor: not-allowed;
 }
 
+
+.image-container{
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  align-items: center; 
+}
 
 .config-controls {
 
@@ -96,7 +177,7 @@ h2 {
   width: 100%;
   padding: 10px;
   margin-top: 20px; 
-  background-color: #007bff;
+  background-color: #4CAF50;
   color: white;
   border: none;
   border-radius: 5px;

@@ -38,6 +38,7 @@ type DeviceState struct {
 	FanOver    string `json:"fan_over"`
 	MisterOver string `json:"mister_over"`
 	LightsOver string `json:"lights_over"`
+	ModeOver   string `json:"mode_over"`
 	Error      string `json:"error"`
 }
 
@@ -47,6 +48,7 @@ type Override struct {
 	Fan_over    string `json:"fan_over"`
 	Mister_over string `json:"mister_over"`
 	Lights_over string `json:"lights_over"`
+	Mode_over   string `json:"mode_over"`
 }
 
 type SensorData struct {
@@ -61,6 +63,7 @@ var overrides = map[string]string{
 	"fan":    "no override",
 	"mister": "no override",
 	"lights": "no override",
+	"mode":   "fruiting",
 	"error":  "no error",
 }
 
@@ -95,7 +98,7 @@ func main() {
 		lights_off_hour_UTC    int       = 20
 	)
 
-	db, err := sql.Open("sqlite3", "/app/sensor_data.db") //location INSIDE THE DOCKER CONTAINER
+	db, err := sql.Open("sqlite3", "/app/sensor_data.db")
 	if err != nil {
 		log.Fatalf("Error opening database: %v", err)
 	}
@@ -124,7 +127,7 @@ func main() {
 	mqttAdaptor := mqtt.NewAdaptor(mqttBrokerURL, mqttClientID)
 
 	sendMQTTAlert := func(message string) {
-		if mqttAdaptor != nil { // Check if mqttAdaptor is not nil and connected
+		if mqttAdaptor != nil {
 			mqttAdaptor.Publish(mqttTopicPrefix+"/alerts", []byte(message))
 			log.Println("MQTT alert sent:", message)
 		} else {
@@ -133,10 +136,9 @@ func main() {
 	}
 
 	clearDatabase := func() {
-		dbMutex.Lock()         // Acquire the lock before writing
-		defer dbMutex.Unlock() // Release the lock after writing
+		dbMutex.Lock()
+		defer dbMutex.Unlock()
 
-		// 1. Delete all rows from the sensors table
 		_, err := db.Exec("DELETE FROM sensors")
 		if err != nil {
 			log.Println("Error clearing sensors table:", err)
@@ -153,7 +155,7 @@ func main() {
 			if err != nil {
 				errMsg = "database clear failed (delete & seq reset): " + err.Error() + "; " + seqErr.Error()
 			}
-			sendMQTTAlert(errMsg) // Send MQTT alert
+			sendMQTTAlert(errMsg)
 			overrides["error"] = errMsg
 		} else {
 			log.Println("Auto-increment sequence for sensors table reset.")
@@ -181,7 +183,7 @@ func main() {
 			if err == nil {
 				humidity, err = sht2x.Humidity()
 				if err == nil {
-					return temp, humidity, nil // Success
+					return temp, humidity, nil
 				}
 			}
 			log.Printf("Error reading sensor data (attempt %d): %v\n", i+1, err)
@@ -189,7 +191,7 @@ func main() {
 		}
 		sendMQTTAlert("Failed to read sensor data after " + strconv.Itoa(maxRetries) + " attempts: " + err.Error())
 		overrides["error"] = "sensor read failed"
-		return 0, 0, err // Return the last error
+		return 0, 0, err
 	}
 
 	work := func() {
@@ -213,11 +215,11 @@ func main() {
 			}
 
 			if fanDuration, ok := configData["fan_run_duration"].(float64); ok {
-				fan_run_duration = time.Duration(fanDuration) * time.Second
+				fan_run_duration = time.Duration(fanDuration) * time.Minute
 				fmt.Println("Updated fan_run_duration to:", fan_run_duration)
 			}
 			if fanInterval, ok := configData["fan_interval"].(float64); ok {
-				fan_interval = time.Duration(fanInterval) * time.Second
+				fan_interval = time.Duration(fanInterval) * time.Minute
 				fmt.Println("Updated fan_interval to:", fan_interval)
 			}
 
@@ -256,6 +258,9 @@ func main() {
 			if overrideData.Lights_over != "" {
 				overrides["lights"] = overrideData.Lights_over
 			}
+			if overrideData.Mode_over != "" {
+				overrides["mode"] = overrideData.Mode_over
+			}
 			fmt.Printf("Current Overrides: %+v\n", overrides)
 		})
 
@@ -278,10 +283,14 @@ func main() {
 			temp, humidity, err := readSensorData()
 			if err != nil {
 				log.Println("Error reading sensor data:", err)
-				return // IMPORTANT:  Return from the gobot.Every callback on error
+				return
 			}
 			// fucked up the on/off need to change the wiring in the future
-			if overrides["lights"] == "on" {
+			if overrides["mode"] == "colonisation" {
+				fmt.Println("Fruiting Mode - STATE: colonisation")
+				led_light.On()
+				light_state = 0
+			} else if overrides["lights"] == "on" {
 				fmt.Println("Light override - STATE: ON")
 				led_light.Off()
 				light_state = 1
@@ -351,7 +360,11 @@ func main() {
 				}
 			}
 
-			if overrides["mister"] == "on" {
+			if overrides["mode"] == "colonisation" {
+				fmt.Println("Fruiting Mode - STATE: colonisation")
+				mister_relay.On()
+				mister_state = 0
+			} else if overrides["mister"] == "on" {
 				fmt.Println("Mister override - STATE: ON")
 				mister_relay.Off()
 				mister_state = 1
@@ -403,7 +416,8 @@ func main() {
 				FanOver:    overrides["fan"],
 				MisterOver: overrides["mister"],
 				LightsOver: overrides["lights"],
-				Error:      overrides["error"], // Include the error status
+				ModeOver:   overrides["mode"],
+				Error:      overrides["error"],
 			}
 			device_state_json, err := json.Marshal(device_state)
 			if err != nil {

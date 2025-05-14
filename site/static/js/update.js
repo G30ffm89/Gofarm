@@ -2,9 +2,8 @@ let humid_gauge;
 let temp_guage;
 let thchart;
 let initialConfigLoaded = false;
-let currentDeviceState = {}; // To store the latest device state
+let currentDeviceState = {}; 
 
-// MQTT Configuration
 const mqttBroker = 'ws://192.168.1.170:9001';
 const mqttClientId = 'web-client-' + Math.random().toString(16).substr(2, 8);
 const mqttTopicSensors = 'farm/sensors/sensors';
@@ -40,7 +39,7 @@ function connectMQTT() {
                 console.log('MQTT: Subscribed to', mqttTopicConfigStatus);
             }
         });
-        client.subscribe(mqttTopicAlerts, { qos: 0 }, function (err) { // Add this
+        client.subscribe(mqttTopicAlerts, { qos: 0 }, function (err) { 
             if (err) {
                 console.error('MQTT: Error subscribing to', mqttTopicAlerts, err);
             } else {
@@ -54,28 +53,54 @@ function connectMQTT() {
     });
 
     client.on('message', function (topic, payload) {
-        try {
-            const data = JSON.parse(payload.toString());
-            console.log('MQTT: Received message on', topic, 'with payload:', data);
-
-            if (topic === mqttTopicSensors) {
+        const rawPayloadString = payload.toString().trim();
+        console.log(`MQTT: Received message on ${topic}. Raw payload: "${rawPayloadString}"`);
+    
+        if (topic === mqttTopicSensors) {
+            try {
+                const data = JSON.parse(rawPayloadString);
+                console.log('MQTT: Parsed sensor data:', data);
                 handleSensorData(data);
-            } else if (topic === mqttTopicDevices) {
+            } catch (error) {
+                console.error('MQTT: Error parsing JSON message on farm/sensors/sensors:', error, "Raw payload was:", rawPayloadString);
+            }
+        } else if (topic === mqttTopicDevices) {
+            try {
+                const data = JSON.parse(rawPayloadString);
+                console.log('MQTT: Parsed device data for farm/sensors/devices:', data);
                 currentDeviceState = data; // Store the latest device state
-                handleDeviceState(data);
-                updateOverrideButtonStates(data); // Update button states
-            } else if (topic === mqttTopicConfigStatus) {
-                if (!initialConfigLoaded) {
+    
+                // Handle UI changes based on mode_over from the device state
+                if (currentDeviceState.mode_over === "colonisation") {
+                    console.log("Device state indicates 'colonisation' mode.");
+                    disableConfigFormOptions(); // Disable specific config inputs
+                } else {
+                    console.log("Device state indicates 'fruiting' or other mode (e.g., ", currentDeviceState.mode_over, ").");
+                    enableConfigFormOptions(); // Re-enable options
+                }
+    
+                handleDeviceState(currentDeviceState);      // Update LEDs
+                updateOverrideButtonStates(currentDeviceState); // Update all override buttons, including new mode buttons
+    
+            } catch (error) {
+                console.error('MQTT: Error parsing JSON message on farm/sensors/devices:', error, "Raw payload was:", rawPayloadString);
+                // Optional: Fallback behavior if parsing fails, e.g., enable forms
+                // enableConfigFormOptions();
+            }
+        } else if (topic === mqttTopicConfigStatus) {
+            if (!initialConfigLoaded) {
+                try {
+                    const data = JSON.parse(rawPayloadString);
+                    console.log('MQTT: Parsed config status data:', data);
                     updateConfigForm(data);
                     initialConfigLoaded = true;
-                    client.unsubscribe(mqttTopicConfigStatus);
-                    console.log('MQTT: Unsubscribed from', mqttTopicConfigStatus);
+                    // client.unsubscribe(mqttTopicConfigStatus); // Optional: consider if you only want to load once
+                } catch (error) {
+                    console.error('MQTT: Error parsing JSON message on farm/sensors/status:', error, "Raw payload was:", rawPayloadString);
                 }
-            } else if (topic === mqttTopicAlerts) {
-                handleAlert(payload.toString());
             }
-        } catch (error) {
-            console.error('MQTT: Error parsing message on', topic, error);
+        } else if (topic === mqttTopicAlerts) {
+            handleAlert(rawPayloadString);
         }
     });
 
@@ -92,7 +117,6 @@ function connectMQTT() {
     });
 }
 
-// Function to handle sensor data
 function handleSensorData(data) {
     console.log("Humidity received:", data.humidity, typeof data.humidity);
     if (humid_gauge) {
@@ -103,16 +127,16 @@ function handleSensorData(data) {
 }
 
 function handleDeviceState(data) {
-    update_led_state(data.pump, 'pump_led');
-    update_led_state(data.heater, 'heater_led');
-    update_led_state(data.fan, 'fan_led');
-    update_led_state(data.mister, 'mister_led');
-    update_led_state(data.lights, 'lights_led');
+    if (!data) return;
+    if (data.hasOwnProperty('pump')) update_led_state(data.pump, 'pump_led');
+    if (data.hasOwnProperty('heater')) update_led_state(data.heater, 'heater_led');
+    if (data.hasOwnProperty('fan')) update_led_state(data.fan, 'fan_led');
+    if (data.hasOwnProperty('mister')) update_led_state(data.mister, 'mister_led');
+    if (data.hasOwnProperty('lights')) update_led_state(data.lights, 'lights_led');
 }
 
 function update_led_state(state, ledId) {
     const led_element = document.getElementById(ledId);
-
     if (led_element) {
         if (state === 1) {
             led_element.classList.add('green');
@@ -121,7 +145,8 @@ function update_led_state(state, ledId) {
             led_element.classList.add('red');
             led_element.classList.remove('green');
         } else {
-            console.error(`Invalid state: ${state}`);
+            console.warn(`Invalid state: ${state} for LED ${ledId}. Expected 0 or 1.`);
+            led_element.classList.add('red');
         }
     } else {
         console.error(`LED element not found: ${ledId}`);
@@ -131,7 +156,7 @@ function update_led_state(state, ledId) {
 function setDeviceState(device, state) {
     if (client && client.connected) {
         const payload = {};
-        payload[`${device}_over`] = state;
+        payload[`${device}_over`] = state; 
         const jsonPayload = JSON.stringify(payload);
         client.publish(mqttTopicOverride, jsonPayload, { qos: 0, retain: false });
         console.log('MQTT: Published override for', device, 'to', state, 'on', mqttTopicOverride);
@@ -217,17 +242,16 @@ function setConfig() {
         console.error('MQTT: Not connected, cannot publish config.');
     }
 }
+const tempMinInput = document.getElementById('temp-min');
+const tempMaxInput = document.getElementById('temp-max');
+const humidMinInput = document.getElementById('humid-min');
+const humidMaxInput = document.getElementById('humid-max');
+const fanDurationInput = document.getElementById('fan-duration');
+const fanIntervalInput = document.getElementById('fan-interval');
+const lightsOnInput = document.getElementById('lights-on-hour');
+const lightsOffInput = document.getElementById('lights-off-hour');
 
 function updateConfigForm(config) {
-    const tempMinInput = document.getElementById('temp-min');
-    const tempMaxInput = document.getElementById('temp-max');
-    const humidMinInput = document.getElementById('humid-min');
-    const humidMaxInput = document.getElementById('humid-max');
-    const fanDurationInput = document.getElementById('fan-duration');
-    const fanIntervalInput = document.getElementById('fan-interval');
-    const lightsOnInput = document.getElementById('lights-on-hour');
-    const lightsOffInput = document.getElementById('lights-off-hour');
-
     if (tempMinInput) tempMinInput.value = config.target_temperature_min;
     if (tempMaxInput) tempMaxInput.value = config.target_temperature_max;
     if (humidMinInput) humidMinInput.value = config.target_humidity_min;
@@ -254,19 +278,32 @@ function handleAlert(alertMessage) {
     }
 }
 
- // *** CORRECTED FUNCTION ***
- // This function now disables the button that represents the current active override state.
+function disableConfigFormOptions() {
+    if (humidMinInput) humidMinInput.disabled = true;
+    if (humidMaxInput) humidMaxInput.disabled = true;
+    if (lightsOnInput) lightsOnInput.disabled = true;
+    if (lightsOffInput) lightsOffInput.disabled = true;
+    console.log('Colonisation mode: Humidity and Lights config options DISABLED.');
+}
+
+function enableConfigFormOptions() {
+    if (humidMinInput) humidMinInput.disabled = false;
+    if (humidMaxInput) humidMaxInput.disabled = false;
+    if (lightsOnInput) lightsOnInput.disabled = false;
+    if (lightsOffInput) lightsOffInput.disabled = false;
+    console.log('Standard mode: Humidity and Lights config options ENABLED.');
+}
+
  function setButtonState(buttonId, isActiveState) {
     const button = document.getElementById(buttonId);
     if (button) {
-        // Disable the button if it represents the current state (isActiveState is true)
         button.disabled = isActiveState;
 
-        // Add/remove the 'disabled' class for styling based on the button's disabled status
+        // style the buttons with disabled
         if (button.disabled) {
-            button.classList.add('disabled'); // Style as disabled/inactive
+            button.classList.add('disabled'); 
         } else {
-            button.classList.remove('disabled'); // Style as enabled/active
+            button.classList.remove('disabled'); 
         }
     } else {
          console.error(`Button element not found: ${buttonId}`);
@@ -274,7 +311,17 @@ function handleAlert(alertMessage) {
 }
 
 function updateOverrideButtonStates(deviceState) {
-    const getOverride = (dev) => deviceState[`${dev}_over`] || "no override";
+    if (!deviceState) {
+        console.warn("updateOverrideButtonStates called with undefined deviceState");
+        return;
+    }
+
+    const getOverride = (dev) => deviceState[`${dev}_over`] || "no override"; 
+    const currentMode = deviceState.mode_over || "fruiting"; 
+
+    // overright  buttons
+    setButtonState('mode-fruiting-button', currentMode === 'fruiting');
+    setButtonState('mode-colonisation-button', currentMode === 'colonisation');
 
     const pumpOverride = getOverride('pump');
     const heaterOverride = getOverride('heater');
@@ -282,31 +329,25 @@ function updateOverrideButtonStates(deviceState) {
     const misterOverride = getOverride('mister');
     const lightsOverride = getOverride('lights');
 
-    // --- Pump Buttons ---
-    // Disable 'pump-on' if pumpOverride is 'on'
     setButtonState('pump-on', pumpOverride === 'on');
     setButtonState('pump-off', pumpOverride === 'off');
-    setButtonState('pump-auto', pumpOverride === 'no override');
+    setButtonState('pump-auto', pumpOverride === 'no override' || pumpOverride === '');
 
-    // --- Heater Buttons ---
     setButtonState('heater-on', heaterOverride === 'on');
     setButtonState('heater-off', heaterOverride === 'off');
-    setButtonState('heater-auto', heaterOverride === 'no override');
+    setButtonState('heater-auto', heaterOverride === 'no override' || heaterOverride === '');
 
-    // --- Fan Buttons ---
     setButtonState('fan-on', fanOverride === 'on');
     setButtonState('fan-off', fanOverride === 'off');
-    setButtonState('fan-auto', fanOverride === 'no override');
+    setButtonState('fan-auto', fanOverride === 'no override' || fanOverride === '');
 
-    // --- Mister Buttons ---
     setButtonState('mister-on', misterOverride === 'on');
     setButtonState('mister-off', misterOverride === 'off');
-    setButtonState('mister-auto', misterOverride === 'no override');
+    setButtonState('mister-auto', misterOverride === 'no override' || misterOverride === '');
 
-    // --- Lights Buttons ---
     setButtonState('lights-on', lightsOverride === 'on');
     setButtonState('lights-off', lightsOverride === 'off');
-    setButtonState('lights-auto', lightsOverride === 'no override');
+    setButtonState('lights-auto', lightsOverride === 'no override' || lightsOverride === '');
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -409,6 +450,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pointer: true,
         symbol: "%",
         gaugeWidthScale: 0.6,
+        relativeGaugeSize: true,
         customSectors: {
             percents: true,
             ranges: [
@@ -432,6 +474,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pointer: true,
         symbol: "°C",
         gaugeWidthScale: 0.6,
+        relativeGaugeSize: true,
         customSectors: {
             ranges: [
               {lo: 0, hi: 5, color: '#2E8B57'}, 
@@ -447,7 +490,6 @@ document.addEventListener('DOMContentLoaded', function () {
     
     });
 
-    connectMQTT();
 
     function updateTime() {
         const now = new Date();
@@ -468,8 +510,32 @@ document.addEventListener('DOMContentLoaded', function () {
     setInterval(updateTime, 1000);
     updateTime();
 
- // --- Add Event Listeners for Override Buttons ---
-     // Helper function to add listeners safely
+    const fruitingButton = document.getElementById('mode-fruiting-button');
+    if (fruitingButton) {
+        fruitingButton.addEventListener('click', () => {
+            setDeviceState('mode', 'fruiting');
+            //if ui wants to be updated right away
+            // enableConfigFormOptions();
+            // currentDeviceState.mode_over = 'fruiting';
+            // updateOverrideButtonStates(currentDeviceState);
+        });
+    } else {
+        console.error("Button element not found: mode-fruiting-button");
+    }
+
+    const colonisationButton = document.getElementById('mode-colonisation-button');
+    if (colonisationButton) {
+        colonisationButton.addEventListener('click', () => {
+            setDeviceState('mode', 'colonisation');
+            //if ui wants to be updated right away
+            // disableConfigFormOptions();
+            // currentDeviceState.mode_over = 'colonisation'; 
+            // updateOverrideButtonStates(currentDeviceState); 
+        });
+    } else {
+        console.error("Button element not found: mode-colonisation-button");
+    }
+
      const addButtonListener = (id, device, state) => {
         const button = document.getElementById(id);
         if (button) {
@@ -479,30 +545,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
-    // Pump
-    addButtonListener('pump-on', 'pump', 'on');
-    addButtonListener('pump-off', 'pump', 'off');
-    addButtonListener('pump-auto', 'pump', 'no override');
+    ['pump', 'heater', 'fan', 'mister', 'lights'].forEach(device => {
+        addButtonListener(`${device}-on`, device, 'on');
+        addButtonListener(`${device}-off`, device, 'off');
+        addButtonListener(`${device}-auto`, device, 'no override');
+    });
 
-    // Heater
-    addButtonListener('heater-on', 'heater', 'on');
-    addButtonListener('heater-off', 'heater', 'off');
-    addButtonListener('heater-auto', 'heater', 'no override');
-
-    // Fan
-    addButtonListener('fan-on', 'fan', 'on');
-    addButtonListener('fan-off', 'fan', 'off');
-    addButtonListener('fan-auto', 'fan', 'no override');
-
-    // Mister
-    addButtonListener('mister-on', 'mister', 'on');
-    addButtonListener('mister-off', 'mister', 'off');
-    addButtonListener('mister-auto', 'mister', 'no override');
-
-    // Lights
-    addButtonListener('lights-on', 'lights', 'on');
-    addButtonListener('lights-off', 'lights', 'off');
-    addButtonListener('lights-auto', 'lights', 'no override');
 
     const configButton = document.getElementById('config-button');
     if (configButton) {
@@ -515,4 +563,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    enableConfigFormOptions();
+    connectMQTT();
+
+
 });
