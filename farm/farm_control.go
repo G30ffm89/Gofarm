@@ -93,7 +93,7 @@ func main() {
 		target_humidity_min    float32   = 75.0
 		target_humidity_max    float32   = 90.0
 		fan_run_duration                 = 5 * time.Minute
-		fan_interval                     = 60 * time.Minute
+		fan_interval                     = 20 * time.Minute
 		lights_on_hour_UTC     int       = 8
 		lights_off_hour_UTC    int       = 20
 	)
@@ -164,7 +164,7 @@ func main() {
 			}
 		}
 	}
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(48 * time.Hour)
 	defer ticker.Stop()
 
 	go func() {

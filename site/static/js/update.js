@@ -54,7 +54,7 @@ function connectMQTT() {
 
     client.on('message', function (topic, payload) {
         const rawPayloadString = payload.toString().trim();
-        console.log(`MQTT: Received message on ${topic}. Raw payload: "${rawPayloadString}"`);
+        console.log(`MQTT: Received message on ${topic}. Payload: ${rawPayloadString}"`);
     
         if (topic === mqttTopicSensors) {
             try {
@@ -62,7 +62,7 @@ function connectMQTT() {
                 console.log('MQTT: Parsed sensor data:', data);
                 handleSensorData(data);
             } catch (error) {
-                console.error('MQTT: Error parsing JSON message on farm/sensors/sensors:', error, "Raw payload was:", rawPayloadString);
+                console.error('MQTT: Error parsing JSON message on farm/sensors/sensors:', error, " payload:", rawPayloadString);
             }
         } else if (topic === mqttTopicDevices) {
             try {
@@ -72,10 +72,10 @@ function connectMQTT() {
     
                 // Handle UI changes based on mode_over from the device state
                 if (currentDeviceState.mode_over === "colonisation") {
-                    console.log("Device state indicates 'colonisation' mode.");
+                    console.log("Device state: colonisation");
                     disableConfigFormOptions(); // Disable specific config inputs
                 } else {
-                    console.log("Device state indicates 'fruiting' or other mode (e.g., ", currentDeviceState.mode_over, ").");
+                    console.log("Device state: fruting");
                     enableConfigFormOptions(); // Re-enable options
                 }
     
@@ -83,7 +83,7 @@ function connectMQTT() {
                 updateOverrideButtonStates(currentDeviceState); // Update all override buttons, including new mode buttons
     
             } catch (error) {
-                console.error('MQTT: Error parsing JSON message on farm/sensors/devices:', error, "Raw payload was:", rawPayloadString);
+                console.error('MQTT: Error parsing JSON message on farm/sensors/devices:', error, "payload:", rawPayloadString);
                 // Optional: Fallback behavior if parsing fails, e.g., enable forms
                 // enableConfigFormOptions();
             }
@@ -96,7 +96,7 @@ function connectMQTT() {
                     initialConfigLoaded = true;
                     // client.unsubscribe(mqttTopicConfigStatus); // Optional: consider if you only want to load once
                 } catch (error) {
-                    console.error('MQTT: Error parsing JSON message on farm/sensors/status:', error, "Raw payload was:", rawPayloadString);
+                    console.error('MQTT: Error parsing JSON message on farm/sensors/status:', error, "payload:", rawPayloadString);
                 }
             }
         } else if (topic === mqttTopicAlerts) {
