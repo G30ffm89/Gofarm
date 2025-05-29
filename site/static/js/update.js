@@ -447,9 +447,8 @@ document.addEventListener('DOMContentLoaded', function () {
         min: 0, 
         max: 100,
         value: 0,
-        pointer: true,
         symbol: "%",
-        gaugeWidthScale: 0.6,
+        gaugeWidthScale: 0.3,
         relativeGaugeSize: true,
         customSectors: {
             percents: true,
@@ -471,9 +470,8 @@ document.addEventListener('DOMContentLoaded', function () {
         max: 30,
         decimals: 2,
         valueFontFamily: "Ubuntu Mono",
-        pointer: true,
         symbol: "°C",
-        gaugeWidthScale: 0.6,
+        gaugeWidthScale: 0.3,
         relativeGaugeSize: true,
         customSectors: {
             ranges: [

@@ -183,7 +183,7 @@ func main() {
 			if err == nil {
 				humidity, err = sht2x.Humidity()
 				if err == nil {
-					return temp, humidity, nil
+					return temp, humidity - 17, nil
 				}
 			}
 			log.Printf("Error reading sensor data (attempt %d): %v\n", i+1, err)
@@ -212,6 +212,14 @@ func main() {
 			if tempMax, ok := configData["target_temperature_max"].(float64); ok {
 				target_temperature_max = float32(tempMax)
 				fmt.Println("Updated target_temperature_max to:", target_temperature_max)
+			}
+			if humidMin, ok := configData["target_humidity_min"].(float64); ok {
+				target_humidity_min = float32(humidMin)
+				fmt.Println("Updated target_humidity_min to:", target_humidity_min)
+			}
+			if humidMax, ok := configData["target_humidity_max"].(float64); ok {
+				target_humidity_max = float32(humidMax)
+				fmt.Println("Updated target_humidity_max to:", target_humidity_max)
 			}
 
 			if fanDuration, ok := configData["fan_run_duration"].(float64); ok {
@@ -338,20 +346,20 @@ func main() {
 
 			if overrides["pump"] == "on" {
 				fmt.Println("Pump override - STATE: ON")
-				pump_relay.On()
+				pump_relay.Off()
 				pump_state = 1
 			} else if overrides["pump"] == "off" {
 				fmt.Println("Pump override - STATE: OFF")
-				pump_relay.Off()
+				pump_relay.On()
 				pump_state = 0
 			} else {
 				if temp > target_temperature_max {
 					fmt.Println("Temperature too high, turning on pump.")
-					pump_relay.On()
+					pump_relay.Off()
 					pump_state = 1
 				} else if temp < target_temperature_min {
 					fmt.Println("Temperature too low, turning off pump.")
-					pump_relay.Off()
+					pump_relay.On()
 					pump_state = 0
 				} else {
 					fmt.Println("Temperature within range - Pump off.")
