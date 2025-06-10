@@ -1,21 +1,48 @@
 @keyframes chartjs-render-animation{from{opacity:.99}to{opacity:1}}.chartjs-render-monitor{animation:chartjs-render-animation 1ms}.chartjs-size-monitor,.chartjs-size-monitor-expand,.chartjs-size-monitor-shrink{position:absolute;direction:ltr;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;visibility:hidden;z-index:-1}.chartjs-size-monitor-expand>div{position:absolute;width:1000000px;height:1000000px;left:0;top:0}.chartjs-size-monitor-shrink>div{position:absolute;width:200%;height:200%;left:0;top:0}
 
-.responsive {
-  width: 100%;
-  height: auto;
-}
 
 html, body {
   height: 100%;
   font-size: 18px;
-  font-family: "Ubuntu Mono", monospace;
+  font-family: "Orbitron", sans-serif;
+  box-sizing: border-box;
+  background-color: black;
+  color: purple;
+}
+
+
+
+.responsive {
+  width: 100%;
+  min-width: 400px;
+  height: auto;
+}
+
+.control-section {
+    display: flex;
+    align-items: center;
+    gap: 10px; 
+}
+.control-section button.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%; 
+    padding: 5px 0;
+}
+
+.header .time {
+    margin-right: 50px;
+}
+
+* {
   box-sizing: border-box;
 }
-
-*, *:before, *:after {
-  box-sizing: inherit; 
-}
-
 
 h2 {
   font-size: 22px;
@@ -24,57 +51,84 @@ h2 {
   margin-top: 0; 
 }
 
-#humid-guage,
-#temp-guage {
-  box-sizing: border-box;   
-  flex: 1 1 200px;
-  flex-grow: 1;
-  flex-shrink: 1;
 
-  max-width: 100%; /* Prevent them from growing beyond their intended max size if there's a lot of space */
-  /* You might still want a height, or manage aspect ratio differently */
-  box-sizing: border-box; /* Include padding and border in the element's total width and height */
-}
 
 .led {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: #ddd;
+  width: 75px;
+  height: 75px; 
   margin-right: 10px;
-  box-shadow: 0 0 5px #666;
+ 
 }
 
-.led.green {
-  background-color: #0f0;
-  box-shadow: 0 0 10px #0f0;
+
+.led .indicator-path {
+    fill: none; 
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    transition: stroke 0.3s ease-in-out;
 }
 
-.led.red {
-  background-color: #f00;
-  box-shadow: 0 0 10px #f00;
+
+.led.red .indicator-path {
+    stroke: #ff0000; 
 }
 
+
+.led.green .indicator-path {
+    stroke: #00ff00; 
+}
+
+.led .primary-path {
+    fill: none;
+    stroke: rgb(255, 255, 255); 
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.led .ac-path {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    transition: stroke 0.3s ease-in-out;
+}
+
+.led.red .ac-path {
+    stroke: #ff0000;
+}
+
+.led.green .ac-path {
+    stroke: #00ff00;
+}
 
 .led-controls {
   display: flex;
+  justify-content: center;
+  align-items: center; 
   gap: 5px;
+  padding-bottom: 5px;
+
 }
 
-
+.led-controls button {background-image: linear-gradient( #04080b, #12191f )}
 .led-controls button {
+  border: 3px solid grey;
+  border-radius: 4px;
+  margin: 10px;
   padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  background-color: #4CAF50;
-  color: white;
+  text-align: center;
+  display: block;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+
 }
 
 .led-controls button:hover {
-  background-color: #367c39;
+   border: 3px solid green;
 }
+         
+
 
 .led-controls button:disabled,
 .led-controls button.disabled {
@@ -93,7 +147,7 @@ h2 {
 
   padding: 20px;
   border-radius: 5px;
-  border: 1px solid #ccc; /* Example border */
+  border: 1px solid #ccc; 
 }
 
 .config-item {
@@ -106,35 +160,136 @@ h2 {
 .config-item label {
   margin-right: 10px; 
   flex-basis: 60%; 
+  font-family: "Space Grotesk", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
 }
 
 .config-item input {
-  flex-basis: 35%; 
+  background-color: black;
+  color: purple;
+  width: 9ch;
+  flex-basis: auto; 
   padding: 5px;
-  border: 1px solid #ccc;
+  border: 3px solid grey;
   border-radius: 3px;
+  font-family: "DotGothic16", sans-serif;
+  font-weight: 400;
+  font-style: normal;
 }
-
-#config-button {
-  display: block; /* Make button take full width of its container */
-  width: 100%;
+.config-item button{
+  align-items: center;
+}
+button {
+  display: block;
   padding: 10px;
   margin-top: 20px; 
-  background-color: #4CAF50;
+  background-image: linear-gradient( #04080b, #12191f );
   color: white;
-  border: none;
-  border-radius: 5px;
+  border: 3px solid grey;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
-#config-button:hover {
-  background-color: #0056b3;
+button:hover {
+  border: 3px solid #367c39;;
 }
 
-#humid-guage, #temp-guage {
-  min-height: 160px; 
-  min-width: 200px; 
-  border: 1px dashed #aaa;
+#humid-guage,
+#temp-guage {
+  box-sizing: border-box;   
+  flex: 1 1 200px;
+  flex-grow: 1;
+  flex-shrink: 1;
+  max-width: 100%; 
+  box-sizing: border-box; 
 }
 
+.guage{
+  border-radius: 5px;
+  border: 1px solid #ccc; 
+}
+
+.card-row{
+  margin: 0 -5px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 18px;
+}
+
+.card {
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+  max-width: 300px;
+  margin: auto;
+  text-align: center;
+  width:20%;
+  float: left;
+  border-radius: 5px;
+  border: 1px solid #ccc; 
+  text-transform: uppercase;
+
+}
+
+.card span {
+  font-family: "DotGothic16", sans-serif;
+}
+
+@media screen and (max-width: 600px) {
+  .card {
+    width: 100%;
+    display: block;
+    margin-bottom: 20px;
+  }
+}
+
+.container{
+  padding: 64px;
+  width: 100%; 
+  display: block; /* Or block, depending on desired layout */
+  flex-direction: column; /* To stack col-80 and canvas vertically */
+  align-items: center; /* To center the canvas if flexed */
+}
+
+.col-50{
+  float: left;
+  width: 50%;
+  padding: 20px;
+}
+@media screen and (max-width: 950px) {
+  .col-50 {
+    width: 100%;
+  }
+  .col-25{
+    width: 100%;
+  }
+}
+
+
+.col-25{
+  float: left;
+  width: 25%;
+  padding: 20px;
+}
+
+
+.g-container{
+  width: 100%;
+  display: flex;
+  flex-direction: column; 
+  align-items: center; 
+}
+
+.col-80 {
+  width: 80%; 
+}
+
+#temp_humid_chart {
+  max-width: 100%;
+  height: 400px;
+}

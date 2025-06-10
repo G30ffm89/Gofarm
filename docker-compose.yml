@@ -2,6 +2,7 @@ networks:
   farm-network:
 
 services:
+
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: mos1
@@ -40,6 +41,28 @@ services:
         read_only: false
     depends_on:
       - mosquitto
+    privileged: true
+
+  farmsite:
+    build:
+      context: .
+      dockerfile: Dockerfile.website
+    container_name: farmsite
+    networks:
+     - farm-network
+    volumes:
+      - type: bind
+        source: site/static/
+        target: /static
+        read_only: false
+      - type: bind
+        source: /home/mike/Documents/Gofarm/farm/sensor_data.db
+        target: /app/sensor_data.db
+        read_only: true
+    depends_on:
+      - mosquitto
+    ports:
+      - "8080:8080"
     privileged: true
 
 volumes:

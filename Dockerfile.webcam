@@ -1,18 +1,21 @@
-FROM golang:1.24-alpine	AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
 # Copy the Go module definition file
 COPY go.mod .
+# Copy go.sum for consistent builds
+COPY go.sum .
 
-# Copy the webcam streamer code
-COPY webcam/ .
+# Copy the 'webcam' directory and its contents into '/app/webcam'
+COPY webcam/ webcam/
 
-# Download Go modules
+# Download Go modules and ensure dependencies are correct.
+# This assumes your Go module path in go.mod is 'furitingoasis/temp_humid'.
 RUN go mod download -x
 
-# Build your Go application
-RUN go build -o streamer webcam/streamer.go
+# Build your Go application, targeting the 'webcam' package within /app
+RUN go build -o streamer ./webcam
 
 # Create a minimal runtime image
 FROM alpine:latest

@@ -1,0 +1,25 @@
+# Use an official Go runtime as a parent image
+# We're using golang:1.24-alpine as requested.
+FROM golang:1.24-alpine
+
+# Set the working directory inside the container.
+# This will be the mount point for your host project's root directory.
+WORKDIR /app/
+
+# Copy go.mod and go.sum into the container's /app directory.
+# This step is crucial for `go mod download` to work during the build phase.
+# Note: These files will be overlaid by the volume mount at runtime,
+# but they are needed here for the build step.
+COPY go.mod go.sum ./
+
+COPY site/ .
+# Download Go module dependencies.
+# This pre-fetches dependencies, so `go run` doesn't need to download them
+# every time you start the container (unless go.mod/go.sum change).
+RUN go mod download -x
+
+# Expose the port(s) your Go web application listens on.
+# Make sure your Go application is actually configured to listen on these ports.
+EXPOSE 8080
+CMD ["go", "run", "."]
+
