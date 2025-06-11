@@ -22,8 +22,10 @@ const (
 	mqttBrokerURL   = "tcp://mos1:1883"
 	mqttClientID    = "farm-controller"
 	mqttTopicPrefix = "farm/sensors"
-	maxRetries      = 3
+	maxRetries      = 3 //used by the read sensor function
 	retryInterval   = 2 * time.Second
+	humidAdjustment = 17
+	tempAdjustment  = 0
 )
 
 type DeviceState struct {
@@ -56,16 +58,6 @@ type Override struct {
 	Mode_over   string `json:"mode_over"`
 }
 
-type SensorData struct {
-	Temperature       float32 `json:"temperature"`
-	Humidity          float32 `json:"humidity"`
-	Timestamp         string  `json:"timestamp"`
-	DailyHighTemp     float32 `json:"daily_high_temp"`
-	DailyLowTemp      float32 `json:"daily_low_temp"`
-	DailyHighHumidity float32 `json:"daily_high_humidity"`
-	DailyLowHumidity  float32 `json:"daily_low_humidity"`
-}
-
 var overrides = map[string]string{
 	"pump":   "no override",
 	"heater": "no override",
@@ -74,6 +66,16 @@ var overrides = map[string]string{
 	"lights": "no override",
 	"mode":   "fruiting",
 	"error":  "no error",
+}
+
+type SensorData struct {
+	Temperature       float32 `json:"temperature"`
+	Humidity          float32 `json:"humidity"`
+	Timestamp         string  `json:"timestamp"`
+	DailyHighTemp     float32 `json:"daily_high_temp"`
+	DailyLowTemp      float32 `json:"daily_low_temp"`
+	DailyHighHumidity float32 `json:"daily_high_humidity"`
+	DailyLowHumidity  float32 `json:"daily_low_humidity"`
 }
 
 var dbMutex sync.Mutex // Used for database to stop the program from spazzing if the bot tries to write while the db is open
@@ -91,21 +93,23 @@ type ConfigStatus struct {
 
 func main() {
 	var (
-		last_fan_run time.Time = time.Now()
-		fan_state    int       = 0
-		light_state  int       = 0
-		heater_state int       = 0
-		pump_state   int       = 0
-		mister_state int       = 0
+		last_fan_run  time.Time     = time.Now()
+		fan_state     int           = 0
+		fanCancelChan chan struct{} //prevents race condition if fan is turned off when fan is already in go routine
+		light_state   int           = 0
+		heater_state  int           = 0
+		pump_state    int           = 0
+		mister_state  int           = 0
 
 		target_temperature_min float32 = 15.0
 		target_temperature_max float32 = 20.0
 		target_humidity_min    float32 = 75.0
 		target_humidity_max    float32 = 90.0
 		fan_run_duration               = 5 * time.Minute
-		fan_interval                   = 20 * time.Minute
+		fan_interval                   = 60 * time.Minute
 		lights_on_hour_UTC     int     = 8
 		lights_off_hour_UTC    int     = 20
+		gobotRefresh           int     = 10 //how often does this device run
 
 		pumpOnTime   time.Time
 		misterOnTime time.Time
@@ -177,6 +181,7 @@ func main() {
 
 	mqttAdaptor := mqtt.NewAdaptor(mqttBrokerURL, mqttClientID)
 
+	//used to send any errors or warnings to the frontend
 	sendMQTTAlert := func(message string) {
 		if mqttAdaptor != nil {
 			mqttAdaptor.Publish(mqttTopicPrefix+"/alerts", []byte(message))
@@ -185,40 +190,40 @@ func main() {
 			log.Println("MQTT not connected, cannot send alert:", message)
 		}
 	}
-
-	clearDatabase := func() {
+	trimSensorDatabase := func() {
 		dbMutex.Lock()
 		defer dbMutex.Unlock()
 
-		_, err := db.Exec("DELETE FROM sensors")
+		// cutoff time  is 7 days ago from the current time.
+		cutoffTime := time.Now().UTC().AddDate(0, 0, -7)
+
+		log.Printf("Trimming database: deleting sensor records older than %v", cutoffTime)
+
+		// Execute the DELETE statement for records
+		result, err := db.Exec("DELETE FROM sensors WHERE timestamp < ?", cutoffTime)
 		if err != nil {
-			log.Println("Error clearing sensors table:", err)
-			sendMQTTAlert("Error clearing database (DELETE): " + err.Error())
-			overrides["error"] = "database clear failed (delete)"
-		} else {
-			log.Println("Sensors table cleared.")
+			log.Println("Error deleting old data from sensors table:", err)
+			sendMQTTAlert("Error trimming database: " + err.Error())
+			overrides["error"] = "database trim failed"
+			return // Exit the function on error
 		}
 
-		_, seqErr := db.Exec("DELETE FROM sqlite_sequence WHERE name='sensors'")
-		if seqErr != nil {
-			log.Println("Error resetting sequence for sensors table:", seqErr)
-			errMsg := "database clear failed (seq reset): " + seqErr.Error()
-			if err != nil {
-				errMsg = "database clear failed (delete & seq reset): " + err.Error() + "; " + seqErr.Error()
-			}
-			sendMQTTAlert(errMsg)
-			overrides["error"] = errMsg
+		// Log how many rows were deleted.
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			log.Println("Error getting rows affected after delete:", err)
+			sendMQTTAlert("DB Trim Warning: Could not get affected rows count.")
 		} else {
-			log.Println("Auto-increment sequence for sensors table reset.")
-			if err == nil {
-				overrides["error"] = "none"
-			}
+			log.Printf("Database trim successful. Deleted %d old records.", rowsAffected)
 		}
+
+		// Successfully completed, ensure error state is cleared.
+		overrides["error"] = "none"
 	}
-	go func() {
-		dbClearTicker := time.NewTicker(48 * time.Hour)
-		defer dbClearTicker.Stop()
 
+	go func() { // reset counter
+		dbTrimTicker := time.NewTicker(24 * time.Hour) // Ticker for daily database trim
+		defer dbTrimTicker.Stop()
 		now := time.Now().UTC()
 
 		nextMidnight := now.Truncate(24 * time.Hour).Add(24 * time.Hour)
@@ -227,13 +232,15 @@ func main() {
 
 		for {
 			select {
-			case <-dbClearTicker.C:
-				log.Println("Initiating 48-hour database clear...")
-				clearDatabase()
+			case <-dbTrimTicker.C: // This case now runs the daily trim operation
+				log.Println("Running daily check to remove sensor data older than 7 days...")
+				trimSensorDatabase() // Call the new function here
 
-			case <-dailyTimerResetTicker.C:
+			case <-dailyTimerResetTicker.C: // This part remains unchanged
 				log.Println("Resetting daily device on-time counters (00:00 UTC)...")
 
+				/*this section just locks the values and sets them to extreams that will be over written on the first sensor read
+				unlocks the the 4 values*/
 				dailyTempHumidityMutex.Lock()
 				dailyHighTemp = 0.0
 				dailyLowTemp = 99.0
@@ -241,8 +248,9 @@ func main() {
 				dailyLowHumidity = 99.0
 				dailyTempHumidityMutex.Unlock()
 
-				log.Println("Daily sensor extremes reset.")
+				log.Println("Daily sensor max and mins reset.")
 
+				//this just writes the daily on durations to values to be written to the database
 				pumpDurationMutex.Lock()
 				currentPumpDuration := pumpDailyDuration
 				pumpDurationMutex.Unlock()
@@ -263,18 +271,19 @@ func main() {
 				currentFanDuration := fanDailyDuration
 				fanDurationMutex.Unlock()
 
+				//saves the date for the device times of the previous day hence why the time isnt being saved
 				dateToSave := time.Now().UTC().Add(-24 * time.Hour).Format("2006-01-02")
 
-				dbMutex.Lock()
+				dbMutex.Lock() //preps the query to be written to database INSERT OR REPLACE just in case there the same day in there
 				stmt, err := db.Prepare(`
 					INSERT OR REPLACE INTO device_daily_times (date, pump_time_on, mister_time_on, heater_time_on, lights_time_on, fan_time_on)
 					VALUES (?, ?, ?, ?, ?, ?)
 				`)
 				if err != nil {
 					log.Printf("Error preparing daily_times insert statement: %v", err)
-					sendMQTTAlert("DB Prep Error (Daily Times): " + err.Error())
+					sendMQTTAlert("DB Prep Error (Daily Times): " + err.Error()) //sends alert to front end in event of an error
 				} else {
-					_, err := stmt.Exec(
+					_, err := stmt.Exec( //executes the query by converting the times into seconds and using the dataetosave
 						dateToSave,
 						int(currentPumpDuration.Seconds()),
 						int(currentMisterDuration.Seconds()),
@@ -288,16 +297,15 @@ func main() {
 					} else {
 						log.Printf("Daily device times for %s saved to DB.", dateToSave)
 
-						// --- NEW: Implement rolling window (delete oldest if count exceeds 35) ---
 						var currentCount int
 						err = db.QueryRow("SELECT COUNT(*) FROM device_daily_times").Scan(&currentCount)
 						if err != nil {
 							log.Printf("Error counting records in device_daily_times: %v", err)
 							sendMQTTAlert("DB Count Error (Daily Times): " + err.Error())
 						} else {
-							if currentCount > 35 {
-								// Find the ID of the oldest record
-								var oldestID int
+							maxDailes := 35               //how many days are saved in table
+							if currentCount > maxDailes { // find the ID of the oldest record at max of 35
+								var oldestID int //used to find the oldest ID to delete
 								err = db.QueryRow("SELECT id FROM device_daily_times ORDER BY date ASC LIMIT 1").Scan(&oldestID)
 								if err != nil {
 									log.Printf("Error finding oldest record in device_daily_times: %v", err)
@@ -309,14 +317,15 @@ func main() {
 										log.Printf("Error deleting oldest record from device_daily_times (ID: %d): %v", oldestID, err)
 										sendMQTTAlert("DB Delete Error (Daily Times): " + err.Error())
 									} else {
-										log.Printf("Deleted oldest record from device_daily_times (ID: %d) to maintain 35-record limit. Current count: %d", oldestID, currentCount-1)
+										log.Printf("Deleted oldest record from device_daily_times (ID: %d) as max amount %d limit. Current count: %d", oldestID, maxDailes, currentCount-1)
 									}
 								}
 							}
 						}
 					}
-					stmt.Close() // Close the statement
+					stmt.Close() //closes the statement
 				}
+				// resets the times for the next day
 				dbMutex.Unlock()
 				pumpDurationMutex.Lock()
 				pumpDailyDuration = 0
@@ -339,21 +348,21 @@ func main() {
 				fanDurationMutex.Unlock()
 
 				dailyTimerResetTicker.Stop()
-				dailyTimerResetTicker = time.NewTicker(24 * time.Hour)
+				dailyTimerResetTicker = time.NewTicker(24 * time.Hour) //new ticker for the day
 			}
 		}
 	}()
 
-	readSensorData := func() (float32, float32, error) {
+	readSensorData := func() (float32, float32, error) { //returns 3 values the temp humid and error
 		var temp float32
 		var humidity float32
 		var err error
-		for i := 0; i < maxRetries; i++ {
+		for i := 0; i < maxRetries; i++ { // if theres a error it will try at maxretries times
 			temp, err = sht2x.Temperature()
 			if err == nil {
 				humidity, err = sht2x.Humidity()
 				if err == nil {
-					return temp, humidity - 17, nil
+					return temp - tempAdjustment, humidity - humidAdjustment, nil
 				}
 			}
 			log.Printf("Error reading sensor data (attempt %d): %v\n", i+1, err)
@@ -361,20 +370,22 @@ func main() {
 		}
 		sendMQTTAlert("Failed to read sensor data after " + strconv.Itoa(maxRetries) + " attempts: " + err.Error())
 		overrides["error"] = "sensor read failed"
-		return 0, 0, err
+		return 0, 0, err //return zeros for temp, humid
 	}
 
 	work := func() {
 
-		mqttAdaptor.On(mqttTopicPrefix+"/config", func(msg mqtt.Message) {
+		mqttAdaptor.On(mqttTopicPrefix+"/config", func(msg mqtt.Message) { //listener for the config topic, allows options to change without restarting the program
 			fmt.Printf("Received config change: %s\n", string(msg.Payload()))
-			var configData map[string]interface{}
-			err := json.Unmarshal(msg.Payload(), &configData)
+			var configData map[string]interface{}             //map to parse JSON msgs
+			err := json.Unmarshal(msg.Payload(), &configData) //decodes json message to configdata
 			if err != nil {
 				log.Println("Error unmarshaling config JSON:", err)
 				return
 			}
 
+			// for each option check if the float exists and then add to configdata map
+			// if option is okay then change the value
 			if tempMin, ok := configData["target_temperature_min"].(float64); ok {
 				target_temperature_min = float32(tempMin)
 				fmt.Println("Updated target_temperature_min to:", target_temperature_min)
@@ -411,14 +422,16 @@ func main() {
 
 		})
 
+		//parses the override data into the Override struct
 		mqttAdaptor.On(mqttTopicPrefix+"/override", func(msg mqtt.Message) {
 			fmt.Printf("Received override command: %s\n", string(msg.Payload()))
 			var overrideData Override
-			err := json.Unmarshal(msg.Payload(), &overrideData)
+			err := json.Unmarshal(msg.Payload(), &overrideData) //decodes json message to overrideData to fill the blueprint
 			if err != nil {
 				log.Println("Error unmarshaling override JSON:", err)
 				return
 			}
+			//recives on, off, any string for auto and colonisation/fruiting for mode
 			if overrideData.Pump_over != "" {
 				overrides["pump"] = overrideData.Pump_over
 			}
@@ -440,28 +453,43 @@ func main() {
 			fmt.Printf("Current Overrides: %+v\n", overrides)
 		})
 
-		runFanForDuration := func(fan_run_duration time.Duration) {
+		//function for defining how long the fan should run for
+		// need to change on off options as its wrong
+		// it prevents the whole program stopping when the fan is running
+		runFanForDuration := func(duration time.Duration, cancel <-chan struct{}) {
 			fmt.Println("Starting fan run.")
 			fanDurationMutex.Lock()
-			fanOnTime = time.Now()
+			fanOnTime = time.Now() //records when the fan is turned on
 			fanDurationMutex.Unlock()
 			fan_relay.Off()
 			fan_state = 1
 
-			time.Sleep(fan_run_duration)
+			timer := time.NewTimer(duration) //timer that will send a signal on its channel when the duration is up
+
+			select {
+			case <-timer.C:
+				// Case happens if theres no override
+				fmt.Println("Fan run completed normally.")
+			case <-cancel:
+				//case when override off happens
+				fmt.Println("Fan run cancelled by override.")
+				timer.Stop() //clean timer
+				return       //quits - the override manages the time off
+			}
 
 			fmt.Println("Stopping fan run.")
 			fan_relay.On()
 			fan_state = 0
-			last_fan_run = time.Now()
+			last_fan_run = time.Now() //records when fan is turned off
 
 			fanDurationMutex.Lock()
-			fanDailyDuration += time.Since(fanOnTime)
-			fanOnTime = time.Time{}
+			fanDailyDuration += time.Since(fanOnTime) //adds ellaspsed time to daily duration
+			fanOnTime = time.Time{}                   // start time reset to a zero value so its not on time cycle no more
 			fanDurationMutex.Unlock()
 		}
 
-		gobot.Every(10*time.Second, func() {
+		refreshInterval := time.Duration(gobotRefresh) * time.Second //changes the int into to seconds
+		gobot.Every(refreshInterval, func() {
 			now_UTC := time.Now().UTC()
 			hour_UTC := now_UTC.Hour()
 			temp, humidity, err := readSensorData()
@@ -470,6 +498,8 @@ func main() {
 				return
 			}
 
+			//records daily max and mins
+			//
 			dailyTempHumidityMutex.Lock()
 			if temp > dailyHighTemp {
 				dailyHighTemp = temp
@@ -485,6 +515,7 @@ func main() {
 			}
 			dailyTempHumidityMutex.Unlock()
 			// fucked up the on/off need to change the wiring in the future
+			//colonisation mode does not require humidity or light so this is turned off
 			if overrides["mode"] == "colonisation" {
 				fmt.Println("Fruiting Mode - STATE: colonisation")
 				if light_state == 1 {
@@ -568,13 +599,7 @@ func main() {
 				currentFanDuration += time.Since(fanOnTime)
 			}
 
-			// Helper function to format duration
-			formatDuration := func(d time.Duration) string {
-				hours := int(d.Hours())
-				minutes := int(d.Minutes()) % 60
-				return fmt.Sprintf("%02d:%02d", hours, minutes)
-			}
-
+			//prints current state
 			fmt.Printf("Last Air Cycle Time: %s Temperature: %.2f°C, Humidity: %.2f%%\n", last_fan_run, temp, humidity)
 
 			if overrides["heater"] == "on" {
@@ -641,7 +666,7 @@ func main() {
 			} else {
 				if temp > target_temperature_max {
 					fmt.Println("Temperature too high, turning on pump.")
-					if pump_state == 0 { // If it was off, record start time
+					if pump_state == 0 {
 						pumpOnTime = time.Now()
 					}
 					pump_relay.Off()
@@ -727,10 +752,15 @@ func main() {
 				fan_state = 1
 			} else if overrides["fan"] == "off" {
 				fmt.Println("Fan override - STATE: OFF")
-				if fan_state == 1 { // If it was on, calculate duration and reset fanOnTime
+				if fan_state == 1 {
+					// Signal the running goroutine to stop, if it exists.
+					if fanCancelChan != nil {
+						close(fanCancelChan)
+						fanCancelChan = nil // Set it back to nil
+					}
 					fanDurationMutex.Lock()
 					fanDailyDuration += time.Since(fanOnTime)
-					fanOnTime = time.Time{} // Reset to zero value, indicating fan is off
+					fanOnTime = time.Time{}
 					fanDurationMutex.Unlock()
 				}
 				fan_relay.On()
@@ -738,12 +768,22 @@ func main() {
 			} else {
 				if time.Since(last_fan_run) >= fan_interval && fan_state == 0 {
 					fmt.Println("Initiating hourly fan run in the background.")
-					go runFanForDuration(fan_run_duration)
-
+					//create a new channel for this specific fan cycle.
+					fanCancelChan = make(chan struct{})
+					// pass the channel to the goroutine.
+					go runFanForDuration(fan_run_duration, fanCancelChan)
 				}
 			}
 
+			// makes the date more redable
+			formatDuration := func(d time.Duration) string {
+				hours := int(d.Hours())
+				minutes := int(d.Minutes()) % 60
+				return fmt.Sprintf("%02d:%02d", hours, minutes)
+			}
+
 			device_state := DeviceState{
+				//1 or 0
 				Pump:       pump_state,
 				Heater:     heater_state,
 				Fan:        fan_state,
@@ -751,6 +791,7 @@ func main() {
 				Lights:     light_state,
 				LastFanRun: last_fan_run.Format(time.RFC3339),
 
+				//"on", "off" "no override" / "colonisation" or "fruiting"
 				PumpOver:   overrides["pump"],
 				HeaterOver: overrides["heater"],
 				FanOver:    overrides["fan"],
@@ -759,20 +800,22 @@ func main() {
 				ModeOver:   overrides["mode"],
 				Error:      overrides["error"],
 
-				PumpTimeOn:   formatDuration(currentPumpDuration),   // Assign formatted duration
-				MisterTimeOn: formatDuration(currentMisterDuration), // Assign formatted duration
+				//turns time in HH:MM
+				PumpTimeOn:   formatDuration(currentPumpDuration),
+				MisterTimeOn: formatDuration(currentMisterDuration),
 				HeaterTimeOn: formatDuration(currentHeaterDuration),
 				LightsTimeOn: formatDuration(currentLightsDuration),
 				FanTimeOn:    formatDuration(currentFanDuration),
 			}
 			device_state_json, err := json.Marshal(device_state)
 			if err != nil {
-				log.Println("Error marshaling device state:", err)
-			} else {
+				log.Println("Error converting device state to json:", err)
+			} else { //PUBLISH
 				mqttAdaptor.Publish(mqttTopicPrefix+"/devices", device_state_json)
 				fmt.Printf("Published device status: %s\n", string(device_state_json))
 			}
 
+			//populates struct with current climate, time and highs/lows
 			sensor_data := SensorData{
 				Temperature:       temp,
 				Humidity:          humidity,
@@ -784,8 +827,8 @@ func main() {
 			}
 			sensor_data_jSON, err := json.Marshal(sensor_data)
 			if err != nil {
-				log.Println("Error marshaling sensor data:", err)
-			} else {
+				log.Println("Error converting sensor data from go to json:", err)
+			} else { //PUBLISH
 				mqttAdaptor.Publish(mqttTopicPrefix+"/sensors", sensor_data_jSON)
 				fmt.Printf("Published device status: %s\n", string(sensor_data_jSON))
 
@@ -793,8 +836,7 @@ func main() {
 				formattedTemp := fmt.Sprintf("%.2f", temp)
 				formattedHumidity := fmt.Sprintf("%.2f", humidity)
 
-				// Format the timestamp
-				dbMutex.Lock() // Acquire the lock before writing
+				dbMutex.Lock() //lock before writing
 				defer dbMutex.Unlock()
 				_, err = db.Exec(`
 					INSERT INTO sensors (temperature, humidity, timestamp)
@@ -810,6 +852,7 @@ func main() {
 				}
 			}
 
+			//gatheres the currect configuration options to be published
 			currentConfig := ConfigStatus{
 				MinTemperature: target_temperature_min,
 				MaxTemperature: target_temperature_max,

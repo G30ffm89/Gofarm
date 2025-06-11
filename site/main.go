@@ -3,8 +3,8 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -17,6 +17,12 @@ type SensorData struct {
 	Value       string  `json:"timestamp"`
 	Temperature float64 `json:"temperature"`
 	Humidity    float64 `json:"humidity"`
+}
+
+type DailySensorReadings struct {
+	Date         string    `json:"date"`
+	Temperatures []float64 `json:"temperatures"`
+	Humidities   []float64 `json:"humidities"`
 }
 
 type DailyDeviceTime struct {
@@ -61,56 +67,73 @@ func main() {
 		c.HTML(http.StatusOK, "home.html", gin.H{})
 	})
 
-	router.GET("/api/sensor_data", func(c *gin.Context) {
-		var totalRows int
-		err := db.QueryRow("SELECT COUNT(*) FROM sensors").Scan(&totalRows)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error counting rows: " + err.Error()})
-			return
-		}
-
-		var step int
-		if totalRows <= 200 {
-			step = 1
-		} else {
-			step = int(math.Ceil(float64(totalRows) / 200.0))
-		}
-
+	router.GET("/api/climate_history", func(c *gin.Context) {
+		sevenDaysAgo := time.Now().UTC().AddDate(0, 0, -7)
 		rows, err := db.Query(`
-		SELECT COALESCE(strftime('%d:%m:%Y %H:%M:%S', SUBSTR(TRIM(timestamp), 1, 19)), ''), temperature, humidity FROM sensors ORDER BY id ASC`)
+			SELECT
+				strftime('%Y-%m-%d %H:%M', timestamp) as interval_start,
+				AVG(temperature) as avg_temp,
+				AVG(humidity) as avg_hum
+			FROM
+				sensors
+			WHERE
+				timestamp >= ?
+			GROUP BY
+				-- Group by a calculated value representing the start of each 15-minute interval
+				strftime('%Y-%m-%d %H', timestamp), CAST(strftime('%M', timestamp) / 15 AS INTEGER)
+			ORDER BY
+				interval_start ASC;
+		`, sevenDaysAgo)
+
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error querying data: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error querying aggregated sensor data: " + err.Error()})
 			return
 		}
 		defer rows.Close()
 
-		var filteredReadings []SensorData
-		count := 0
-		for rows.Next() {
-			var reading SensorData
+		dailyReadingsMap := make(map[string]*DailySensorReadings)
 
-			err = rows.Scan(&reading.Value, &reading.Temperature, &reading.Humidity)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning row: " + err.Error()})
+		for rows.Next() {
+			var intervalStart string
+			var temp, hum float64
+			if err := rows.Scan(&intervalStart, &temp, &hum); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning aggregated sensor row: " + err.Error()})
 				return
 			}
 
-			if count%step == 0 {
-				filteredReadings = append(filteredReadings, reading)
+			// Extract just the date part (YYYY-MM-DD) to use as the map key
+			dateKey := intervalStart[0:10]
+
+			if _, ok := dailyReadingsMap[dateKey]; !ok {
+				dailyReadingsMap[dateKey] = &DailySensorReadings{
+					Date:         dateKey,
+					Temperatures: []float64{},
+					Humidities:   []float64{},
+				}
 			}
-			count++
+
+			dailyReadingsMap[dateKey].Temperatures = append(dailyReadingsMap[dateKey].Temperatures, temp)
+			dailyReadingsMap[dateKey].Humidities = append(dailyReadingsMap[dateKey].Humidities, hum)
 		}
 
 		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating rows: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating aggregated sensor rows: " + err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, filteredReadings)
+		var responseData []DailySensorReadings
+		for _, data := range dailyReadingsMap {
+			responseData = append(responseData, *data)
+		}
+		sort.Slice(responseData, func(i, j int) bool {
+			return responseData[i].Date > responseData[j].Date
+		})
+
+		c.JSON(http.StatusOK, responseData)
 	})
 
 	router.GET("/api/device_daily_times", func(c *gin.Context) {
-		daysStr := c.DefaultQuery("days", "30") // Default to 7 days
+		daysStr := c.DefaultQuery("days", "7")
 		days, err := strconv.Atoi(daysStr)
 		if err != nil || days <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid 'days' parameter. Must be a positive integer."})
@@ -120,8 +143,6 @@ func main() {
 			days = 35
 		}
 
-		// Calculate the date N days ago (inclusive)
-		// Use UTC to match how data is stored by farm_control
 		nDaysAgo := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
 
 		rows, err := db.Query(`

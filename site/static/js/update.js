@@ -1,28 +1,45 @@
+const mqttBroker = 'ws://192.168.1.170:9001'; //websocket broker url
+const mqttClientId = 'web-client-' + Math.random().toString(16).substr(2, 8); //creates unique id for each session
+const mqttTopicSensors = 'farm/sensors/sensors'; //live temp/humid data
+const mqttTopicDevices = 'farm/sensors/devices'; //on/off status, overrides and run times for devies
+const mqttTopicOverride = 'farm/sensors/override';
+const mqttTopicConfigSet = 'farm/sensors/config';
+const mqttTopicConfigStatus = 'farm/sensors/status';
+const mqttTopicAlerts = 'farm/sensors/alerts';
+const LOCAL_STORAGE_WATTS_KEY = 'deviceWattages'; //key to save custom wattage
+
 let humid_gauge;
 let temp_guage;
-let thchart;
-let initialConfigLoaded = false;
-let currentDeviceState = {}; 
-let DEVICE_POWER_WATTS = {
+let initialConfigLoaded = false; //prevents config from being reloaded every time a request is sent
+let currentDeviceState = {}; //stores the most recent device state json objects from go
+let latestDeviceStateData = null;
+let isConfigEditing = false; 
+
+let DEVICE_POWER_WATTS = { //object to host the watts for each device 
     pump: 50,
     heater: 150,
     mister: 30,
     lights: 20,
     fan: 25
 };
-const mqttBroker = 'ws://192.168.1.170:9001';
-const mqttClientId = 'web-client-' + Math.random().toString(16).substr(2, 8);
-const mqttTopicSensors = 'farm/sensors/sensors';
-const mqttTopicDevices = 'farm/sensors/devices';
-const mqttTopicOverride = 'farm/sensors/override';
-const mqttTopicConfigSet = 'farm/sensors/config';
-const mqttTopicConfigStatus = 'farm/sensors/status';
-const mqttTopicAlerts = 'farm/sensors/alerts';
-const LOCAL_STORAGE_WATTS_KEY = 'deviceWattages';
-let latestDeviceStateData = null;
 
-function connectMQTT() {
-    client = mqtt.connect(mqttBroker, { clientId: mqttClientId });
+const allConfigControls = [ //array of objects or the config panel htmlid is for the go backend
+    { htmlId: 'temp-min', jsonKey: 'target_temperature_min', input: null, display: null, type: 'float', unit: '°C' },
+    { htmlId: 'temp-max', jsonKey: 'target_temperature_max', input: null, display: null, type: 'float', unit: '°C' },
+    { htmlId: 'humid-min', jsonKey: 'target_humidity_min', input: null, display: null, type: 'float', unit: '%' },
+    { htmlId: 'humid-max', jsonKey: 'target_humidity_max', input: null, display: null, type: 'float', unit: '%' },
+    { htmlId: 'fan-duration', jsonKey: 'fan_run_duration_minutes', input: null, display: null, type: 'float', unit: ' min' },
+    { htmlId: 'fan-interval', jsonKey: 'fan_interval_minutes', input: null, display: null, type: 'float', unit: ' min' },
+    { htmlId: 'lights-on-hour', jsonKey: 'lights_on_hour_UTC', input: null, display: null, type: 'int', unit: ':00' },
+    { htmlId: 'lights-off-hour', jsonKey: 'lights_off_hour_UTC', input: null, display: null, type: 'int', unit: ':00' }
+];
+
+
+
+
+
+function connectMQTT() {//initiate websocket connection 
+    client = mqtt.connect(mqttBroker, { clientId: mqttClientId }); //used to manage the connection globally
 
     client.on('connect', function () {
         console.log('MQTT: Connected to', mqttBroker, 'with Client ID', mqttClientId);
@@ -56,19 +73,15 @@ function connectMQTT() {
         });
     });
 
-    client.on('error', function (err) {
-        console.error('MQTT: Connection error:', err);
-    });
-
     client.on('message', function (topic, payload) {
-        const rawPayloadString = payload.toString().trim();
+        const rawPayloadString = payload.toString().trim(); //converts the payload into JS string and removes any whitespace from start and end
         console.log(`MQTT: Received message on ${topic}. Payload: ${rawPayloadString}"`);
     
-        if (topic === mqttTopicSensors) {
+        if (topic === mqttTopicSensors) { //try catch prevents crashing on malformed data
             try {
-                const data = JSON.parse(rawPayloadString);
+                const data = JSON.parse(rawPayloadString); //takes line and turns it to js string
                 console.log('MQTT: Parsed sensor data:', data);
-                handleSensorData(data);
+                handleSensorData(data); //data is then passed into the handlesensor data
             } catch (error) {
                 console.error('MQTT: Error parsing JSON message on farm/sensors/sensors:', error, " payload:", rawPayloadString);
             }
@@ -85,11 +98,11 @@ function connectMQTT() {
   
             }
         } else if (topic === mqttTopicConfigStatus) {
-            if (!initialConfigLoaded) {
+            if (!initialConfigLoaded) { //ensures it only runs once as once it runs its set to true
                 try {
                     const data = JSON.parse(rawPayloadString);
                     console.log('MQTT: Parsed config status data:', data);
-                    updateConfigForm(data);
+                    updateConfigForm(data); //populates config form
                     initialConfigLoaded = true;
                 } catch (error) {
                     console.error('MQTT: Error parsing JSON message on farm/sensors/status:', error, "payload:", rawPayloadString);
@@ -98,6 +111,10 @@ function connectMQTT() {
         } else if (topic === mqttTopicAlerts) {
             handleAlert(rawPayloadString);
         }
+    });
+
+    client.on('error', function (err) {
+        console.error('MQTT: Connection error:', err);
     });
 
     client.on('close', function () {
@@ -113,19 +130,25 @@ function connectMQTT() {
     });
 }
 
+///displays 
+//guages and high lows
 function handleSensorData(data) {
-    console.log("Humidity received:", data.humidity, typeof data.humidity);
+    //prevents crash from program reciving a message before guages are loaded
+    // it just refreshes the guage using the data
     if (humid_gauge) {
-      console.log("Refreshing humid_gauge with:", data.humidity); //debugging 
       humid_gauge.refresh(data.humidity);
     }
-    if (temp_guage) temp_guage.refresh(data.temperature);
+    if (temp_guage) {
+        temp_guage.refresh(data.temperature);
+    }
 
+    //find the relevant IDS 
     const dailyHumidHighElement = document.getElementById('daily-humid-high');
     const dailyHumidLowElement = document.getElementById('daily-humid-low');
     const dailyTempHighElement = document.getElementById('daily-temp-high');
     const dailyTempLowElement = document.getElementById('daily-temp-low');
 
+    //if the check is seccuessful and the key exists in data it writes the value to 1 decimal place ie 82.9
     if (dailyHumidHighElement && data.daily_high_humidity !== undefined) {
         dailyHumidHighElement.textContent = `High: ${data.daily_high_humidity.toFixed(1)}%`;
     }
@@ -140,14 +163,20 @@ function handleSensorData(data) {
     }
 }
 
+//device card updater
 function handleDeviceState(data, recalculateOnlyParam) {
+    /* when a new message comes from /devices the fucntion gets called without the second para 
+    so it defaults to false so a full update is called
+    recalculation set to true only the energy functions  */
     const recalculateOnly = recalculateOnlyParam || false; 
 
-
     console.log("handleDeviceState called. Data:", data, "Recalculate only:", recalculateOnly); // DEBUG
-    if (!data) return;
+    if (!data) return; //if theres no data it wont crash
 
-    if (!recalculateOnly) {
+    /* section only runs in full update mode
+    safety check to see if they key(ie pump) exists in data before using it
+    then changes the led state based on if its 1 or 0  */
+    if (!recalculateOnly) { 
         if (data.hasOwnProperty('pump')) update_led_state(data.pump, 'pump_led');
         if (data.hasOwnProperty('heater')) update_led_state(data.heater, 'heater_led');
         if (data.hasOwnProperty('fan')) update_led_state(data.fan, 'fan_led');
@@ -171,6 +200,7 @@ function handleDeviceState(data, recalculateOnlyParam) {
     const lightsEnergyElement = document.getElementById('lights-energy-kwh');
     const fanEnergyElement = document.getElementById('fan-energy-kwh');
 
+    // for each device this updates the time on and energy use
     function updateDeviceCurrentDisplay(deviceType, timeOnKey, timeOnElement, energyElement) {
         console.log(`Attempting to update current display for: ${deviceType}`); // DEBUG
         console.log(`  Time On Key: ${timeOnKey}, Element:`, timeOnElement, `Energy Element:`, energyElement); // DEBUG
@@ -191,8 +221,9 @@ function handleDeviceState(data, recalculateOnlyParam) {
                     return;
                 }
 
+                //splits the time and calulates the mintues
                 const totalHours = hours + (minutes / 60);
-                const powerWatts = DEVICE_POWER_WATTS[deviceType];
+                const powerWatts = DEVICE_POWER_WATTS[deviceType]; //checks power raiting for the device
                 const energyKwh = (powerWatts * totalHours) / 1000;
                 energyElement.textContent = `${energyKwh.toFixed(2)} kWh`;
                 console.log(`  ${deviceType} Energy Calculated: ${energyKwh.toFixed(2)} kWh`); // DEBUG
@@ -206,207 +237,60 @@ function handleDeviceState(data, recalculateOnlyParam) {
             if (energyElement) energyElement.textContent = '0.00 kWh';
         }
     }
-
+    //calls the function for eachdevice
     updateDeviceCurrentDisplay('pump', 'pump_time_on', pumpTimeOnElement, pumpEnergyElement);
     updateDeviceCurrentDisplay('mister', 'mister_time_on', misterTimeOnElement, misterEnergyElement);
     updateDeviceCurrentDisplay('heater', 'heater_time_on', heaterTimeOnElement, heaterEnergyElement);
     updateDeviceCurrentDisplay('lights', 'lights_time_on', lightTimeOnElement, lightsEnergyElement);
     updateDeviceCurrentDisplay('fan', 'fan_time_on', fanTimeOnElement, fanEnergyElement);
 
+    //if its a full update it runs these two extra function 
     if (!recalculateOnly) {
     currentDeviceState = data;
-    updateOverrideButtonStates(currentDeviceState);
+    updateOverrideButtonStates(currentDeviceState); //on off buttons 
     console.log("Mode and override states updated (not a recalculation).");
 
-    setConfigInputDisplayAndState(currentDeviceState.mode_over);
+    setConfigInputDisplayAndState(currentDeviceState.mode_over); //MODES
 }
 
 
-}
-
-function update_led_state(state, ledId) {
-    const led_element = document.getElementById(ledId);
-    if (led_element) {
-        if (state === 1) {
-            led_element.classList.add('green');
-            led_element.classList.remove('red');
-        } else if (state === 0) {
-            led_element.classList.add('red');
-            led_element.classList.remove('green');
-        } else {
-            console.warn(`Invalid state: ${state} for LED ${ledId}. Expected 0 or 1.`);
-            led_element.classList.add('red');
-        }
-    } else {
-        console.error(`LED element not found: ${ledId}`);
-    }
-}
-
-function setDeviceState(device, state) {
-    if (client && client.connected) {
-        const payload = {};
-        payload[`${device}_over`] = state; 
-        const jsonPayload = JSON.stringify(payload);
-        client.publish(mqttTopicOverride, jsonPayload, { qos: 0, retain: false });
-        console.log('MQTT: Published override for', device, 'to', state, 'on', mqttTopicOverride);
-    } else {
-        console.error('MQTT: Not connected, cannot publish override.');
-    }
-}
-
-let isConfigEditing = false; 
-
-const tempMinInput = document.getElementById('temp-min-input'); // Updated ID
-const tempMinDisplay = document.getElementById('temp-min-display'); // NEW
-const tempMaxInput = document.getElementById('temp-max-input');
-const tempMaxDisplay = document.getElementById('temp-max-display');
-const humidMinInput = document.getElementById('humid-min-input');
-const humidMinDisplay = document.getElementById('humid-min-display');
-const humidMaxInput = document.getElementById('humid-max-input');
-const humidMaxDisplay = document.getElementById('humid-max-display');
-const fanDurationInput = document.getElementById('fan-duration-input');
-const fanDurationDisplay = document.getElementById('fan-duration-display');
-const fanIntervalInput = document.getElementById('fan-interval-input');
-const fanIntervalDisplay = document.getElementById('fan-interval-display');
-const lightsOnInput = document.getElementById('lights-on-hour-input');
-const lightsOnDisplay = document.getElementById('lights-on-hour-display');
-const lightsOffInput = document.getElementById('lights-off-hour-input');
-const lightsOffDisplay = document.getElementById('lights-off-hour-display');
-
-const allConfigControls = [
-    { htmlId: 'temp-min', jsonKey: 'target_temperature_min', input: tempMinInput, display: tempMinDisplay, type: 'float', unit: '°C' },
-    { htmlId: 'temp-max', jsonKey: 'target_temperature_max', input: tempMaxInput, display: tempMaxDisplay, type: 'float', unit: '°C' },
-    { htmlId: 'humid-min', jsonKey: 'target_humidity_min', input: humidMinInput, display: humidMinDisplay, type: 'float', unit: '%' },
-    { htmlId: 'humid-max', jsonKey: 'target_humidity_max', input: humidMaxInput, display: humidMaxDisplay, type: 'float', unit: '%' },
-    { htmlId: 'fan-duration', jsonKey: 'fan_run_duration_minutes', input: fanDurationInput, display: fanDurationDisplay, type: 'float', unit: ' min' },
-    { htmlId: 'fan-interval', jsonKey: 'fan_interval_minutes', input: fanIntervalInput, display: fanIntervalDisplay, type: 'float', unit: ' min' },
-    { htmlId: 'lights-on-hour', jsonKey: 'lights_on_hour_UTC', input: lightsOnInput, display: lightsOnDisplay, type: 'int', unit: ':00' },
-    { htmlId: 'lights-off-hour', jsonKey: 'lights_off_hour_UTC', input: lightsOffInput, display: lightsOffDisplay, type: 'int', unit: ':00' }
-];
-
-function setConfigInputDisplayAndState(mode) {
- 
-    allConfigControls.forEach(control => {
-        if (control.input && control.display) {
-            if (isConfigEditing) {
-                control.display.style.display = 'none';
-                control.input.style.display = 'inline';
-            } else {
-                control.display.style.display = 'inline';
-                control.input.style.display = 'none';
-            }
-
-            let shouldBeDisabled = !isConfigEditing; 
-
-            if (mode === "colonisation" &&
-                (control.htmlId === 'humid-min' || control.htmlId === 'humid-max' ||
-                 control.htmlId === 'lights-on-hour' || control.htmlId === 'lights-off-hour')) {
-                shouldBeDisabled = true;
-            }
-            control.input.disabled = shouldBeDisabled;
-        }
-    });
-
-    if (mode === "colonisation") {
-        console.log('Config options: Humidity and Lights DISABLED due to Colonisation mode (others enabled if editing).');
-    } else {
-        console.log('Config options: All ENABLED due to Fruiting mode (respecting edit mode).');
-    }
-}
-
-function toggleConfigEditMode() {
-    isConfigEditing = !isConfigEditing;
-
-    const configToggleButton = document.getElementById('config-toggle-button');
-
-    configToggleButton.textContent = isConfigEditing ? 'Apply Configuration' : 'Edit Configuration';
-    configToggleButton.classList.remove('disabled'); 
-
-    setConfigInputDisplayAndState(currentDeviceState.mode_over);
-
-    if (!isConfigEditing) { 
-        console.log('Exited configuration edit mode. Applying changes...');
-        setConfig(); 
-    } else { 
-        console.log('Entered configuration edit mode.');
-    }
-}
-
-
-
-function setConfig() {
-    const config = {};
-
-    allConfigControls.forEach(control => {
-        if (control.input) {
-            let value;
-            if (control.type === 'float') {
-                value = parseFloat(control.input.value);
-            } else if (control.type === 'int') {
-                value = parseInt(control.input.value);
-            }
-
-            if (!isNaN(value)) {
-                config[control.jsonKey] = value; 
-            } else {
-                console.error(`Invalid input for ${control.label}. Value: ${control.input.value}`);
-                alert(`Invalid input for ${control.label}. Please enter a valid number.`);
-                isConfigEditing = true; 
-                setConfigInputDisplayAndState(currentDeviceState.mode_over);
-                return;
-            }
-        } else {
-            console.error(`Input element for ${control.label} not found.`);
-            return;
-        }
-    });
-
-    if (client && client.connected) {
-        const jsonPayload = JSON.stringify(config);
-        client.publish(mqttTopicConfigSet, jsonPayload, { qos: 0, retain: false });
-        console.log('MQTT: Published config change:', config, 'to', mqttTopicConfigSet);
-
-    } else {
-        console.error('MQTT: Not connected, cannot publish config.');
-        isConfigEditing = true; 
-        setConfigInputDisplayAndState(currentDeviceState.mode_over);
-        alert("MQTT not connected. Cannot apply configuration. Please check connection.");
-    }
-}
-
-function updateConfigForm(config) {
-    if (!isConfigEditing) {
-        allConfigControls.forEach(control => {
-            if (control.input && control.display && config.hasOwnProperty(control.jsonKey)) {
-                const value = config[control.jsonKey];
-                control.input.value = value; 
-                control.display.textContent = `${value}${control.unit || ''}`;
-            }
-        });
-        console.log('Configuration form updated from MQTT status.');
-    } else {
-        console.log('Configuration form update from MQTT status skipped (in edit mode).');
-    }
 }
 
 function handleAlert(alertMessage) {
-    console.warn('Received Alert:', alertMessage);
-    const alertContainer = document.getElementById('alert-container');
-    if (alertContainer) {
+    console.warn('Received Alert:', alertMessage); //warning stays after the alert hides
+    const alertContainer = document.getElementById('alert-container'); //area on the page where the alert will show
+    if (alertContainer) { 
         const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-danger';
-        alertDiv.textContent = alertMessage;
+        alertDiv.className = 'error'; //css option - NEED TO ADD
+        alertDiv.textContent = alertMessage; //this is the message to e shown
         alertContainer.appendChild(alertDiv);
 
-        setTimeout(() => alertDiv.remove(), 5000);
+        setTimeout(() => alertDiv.remove(), 5000);//error will go after a period of time
     } else {
         console.error('alert-container not found');
         alert(alertMessage)
     }
 }
 
+function update_led_state(state, ledId) {
+    const led_element = document.getElementById(ledId); //finds target element and the state either 1/0
+    if (led_element) { //if the element has been found 
+        if (state === 1) {
+            led_element.classList.add('green');//add the green css
+            led_element.classList.remove('red');
+        } else if (state === 0) {
+            led_element.classList.add('red');//adds red css
+            led_element.classList.remove('green');
+        } else {
+            console.warn(`Invalid state: ${state} for LED ${ledId}. Expected 0 or 1.`);
+            led_element.classList.add('red');//defualt state red 
+        }
+    } else {
+        console.error(`LED element not found: ${ledId}`);
+    }
+}
 
- function setButtonState(buttonId, isActiveState) {
+function setButtonState(buttonId, isActiveState) {
     const button = document.getElementById(buttonId);
     if (button) {
         button.disabled = isActiveState;
@@ -461,6 +345,143 @@ function updateOverrideButtonStates(deviceState) {
     setButtonState('lights-auto', lightsOverride === 'no override' || lightsOverride === '');
 }
 
+function updateConfigForm(config) {
+    if (!isConfigEditing) {
+        allConfigControls.forEach(control => {
+            if (control.input && control.display && config.hasOwnProperty(control.jsonKey)) {
+                const value = config[control.jsonKey];
+                control.input.value = value; 
+                control.display.textContent = `${value}${control.unit || ''}`;
+            }
+        });
+        console.log('Configuration form updated from MQTT status.');
+    } else {
+        console.log('Configuration form update from MQTT status skipped (in edit mode).');
+    }
+}
+
+function updateTime() {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        ];
+        const month = monthNames[now.getMonth()];
+        const year = now.getFullYear();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+
+        const formattedTime = `${day} ${month} ${year} - ${hours}:${minutes}`;
+
+        document.getElementById('current-time').textContent = formattedTime;
+}
+
+
+//settings 
+function setDeviceState(device, state) {
+    if (client && client.connected) {
+        const payload = {};
+        payload[`${device}_over`] = state; 
+        const jsonPayload = JSON.stringify(payload);
+        client.publish(mqttTopicOverride, jsonPayload, { qos: 0, retain: false });
+        console.log('MQTT: Published override for', device, 'to', state, 'on', mqttTopicOverride);
+    } else {
+        console.error('MQTT: Not connected, cannot publish override.');
+    }
+}
+function setConfig() {
+    const config = {};
+
+       allConfigControls.forEach(control => {
+        if (control.input) {
+            let value;
+            if (control.type === 'float') {
+                value = parseFloat(control.input.value);
+            } else if (control.type === 'int') {
+                value = parseInt(control.input.value);
+            }
+
+            if (!isNaN(value)) {
+                config[control.jsonKey] = value;
+            } else {
+                console.error(`Invalid input for ${control.label}. Value: ${control.input.value}`);
+                alert(`Invalid input for ${control.label}. Please enter a valid number.`);
+                isConfigEditing = true;
+                setConfigInputDisplayAndState(currentDeviceState.mode_over);
+                return;
+            }
+        } else {
+            console.error(`Input element for ${control.label} not found.`);
+            return;
+        }
+    });
+
+    updateConfigForm(config);
+
+
+    if (client && client.connected) {
+        const jsonPayload = JSON.stringify(config);
+        client.publish(mqttTopicConfigSet, jsonPayload, { qos: 0, retain: false });
+        console.log('MQTT: Published config change:', config, 'to', mqttTopicConfigSet);
+
+    } else {
+        console.error('MQTT: Not connected, cannot publish config.');
+        isConfigEditing = true; 
+        setConfigInputDisplayAndState(currentDeviceState.mode_over);
+        alert("MQTT not connected. Cannot apply configuration. Please check connection.");
+    }
+}
+
+//form managment 
+function setConfigInputDisplayAndState(mode) {
+ 
+    allConfigControls.forEach(control => {
+        if (control.input && control.display) {
+            if (isConfigEditing) {
+                control.display.style.display = 'none';
+                control.input.style.display = 'inline';
+            } else {
+                control.display.style.display = 'inline';
+                control.input.style.display = 'none';
+            }
+
+            let shouldBeDisabled = !isConfigEditing; 
+
+            if (mode === "colonisation" &&
+                (control.htmlId === 'humid-min' || control.htmlId === 'humid-max' ||
+                 control.htmlId === 'lights-on-hour' || control.htmlId === 'lights-off-hour')) {
+                shouldBeDisabled = true;
+            }
+            control.input.disabled = shouldBeDisabled;
+        }
+    });
+
+    if (mode === "colonisation") {
+        console.log('Config options: Humidity and Lights DISABLED due to Colonisation mode (others enabled if editing).');
+    } else {
+        console.log('Config options: All ENABLED due to Fruiting mode (respecting edit mode).');
+    }
+}
+
+function toggleConfigEditMode() {
+    isConfigEditing = !isConfigEditing;
+
+    const configToggleButton = document.getElementById('config-toggle-button');
+
+    configToggleButton.textContent = isConfigEditing ? 'Apply Configuration' : 'Edit Configuration';
+    configToggleButton.classList.remove('disabled'); 
+
+    setConfigInputDisplayAndState(currentDeviceState.mode_over);
+
+    if (!isConfigEditing) { 
+        console.log('Exited configuration edit mode. Applying changes...');
+        setConfig(); 
+    } else { 
+        console.log('Entered configuration edit mode.');
+    }
+}
+
+//WATTAGE
 function loadWattagesFromLocalStorage() {
     try {
         const storedWatts = localStorage.getItem(LOCAL_STORAGE_WATTS_KEY);
@@ -538,17 +559,8 @@ function recalculateAllEnergyDisplays() {
     fetchAndDisplayHistoricalEnergy();
 }
 
-function formatSecondsToHhMm(totalSeconds) {
-    if (totalSeconds === undefined || totalSeconds < 0) {
-        return "--:--";
-    }
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-}
-
+//API CALLS
 const apiDailyDeviceTimes = '/api/device_daily_times';
-
 
 async function fetchAndDisplayHistoricalEnergy() {
     try {
@@ -600,10 +612,27 @@ async function fetchAndDisplayHistoricalEnergy() {
     }
 }
 
+function formatSecondsToHhMm(totalSeconds) {
+    if (totalSeconds === undefined || totalSeconds < 0) {
+        return "--:--";
+    }
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
 document.addEventListener('DOMContentLoaded', function () {
 
-    loadWattagesFromLocalStorage(); // load watts from localStorage first
-    initializeWattageInputs(); 
+
+   allConfigControls.forEach(control => {
+        control.input = document.getElementById(`${control.htmlId}-input`);
+        control.display = document.getElementById(`${control.htmlId}-display`);
+    });
+
+    // --- Step B: Initialize UI and load data ---
+    loadWattagesFromLocalStorage();
+    initializeWattageInputs();
+    updateTime(); // Call once immediately
 
     humid_gauge = new JustGage({ 
         id: "humid-guage", 
@@ -655,163 +684,33 @@ document.addEventListener('DOMContentLoaded', function () {
     
     });
 
-    connectMQTT();
-
-    fetchAndDisplayHistoricalEnergy();
-    setInterval(fetchAndDisplayHistoricalEnergy, 60 * 60 * 1000);
-
-    const ctx = document.getElementById('temp_humid_chart');
-    let thchart;
-    const updateInterval = 5 * 60 * 1000;
-    Chart.defaults.font.family = "Space Grotesk";
-    Chart.defaults.font.size = 18;
-
-    function createChart(temperature = [], humidity = [], timeLabel = []) {
-        if (thchart) {
-            thchart.destroy();
-        }
-        thchart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: timeLabel,
-                datasets: [
-                    {
-                        label: 'Temperature',
-                        data: temperature,
-                        yAxisID: 'y',
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Humidity',
-                        data: humidity,
-                        yAxisID: 'y1',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        tension: 0.1
-                    }
-                ]
-            },
-            options: {
-                scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: 'Temperature (°C)'
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        grid: {
-                            drawOnChartArea: false
-                        },
-                        title: {
-                            display: true,
-                            text: 'Humidity (%)'
-                        }
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Time'
-                        }
-                    }
-                },
-                maintainAspectRatio: false,
-                responsive: true
+    const addButtonListener = (elementId, event, callback) => {
+            const button = document.getElementById(elementId);
+            if (button) {
+                button.addEventListener(event, callback);
+            } else {
+                console.error(`Event listener setup failed: Element with ID '${elementId}' not found.`);
             }
-        });
-    }
+        };
 
-    async function fetchData() {
-        try {
-            const response = await fetch('/api/sensor_data');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-
-            const formattedTimestamps = data.map(item => item.timestamp);
-            const temperatures = data.map(item => item.temperature);
-            const humidities = data.map(item => item.humidity);
-
-            createChart(temperatures, humidities, formattedTimestamps);
-
-        } catch (error) {
-            console.error('Error fetching sensor data:', error);
-        }
-    }
-
-    fetchData();
-    setInterval(fetchData, updateInterval);
-
-    function updateTime() {
-        const now = new Date();
-        const day = String(now.getDate()).padStart(2, '0');
-        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-        ];
-        const month = monthNames[now.getMonth()];
-        const year = now.getFullYear();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-
-        const formattedTime = `${day} ${month} ${year} - ${hours}:${minutes}`;
-
-        document.getElementById('current-time').textContent = formattedTime;
-    }
-
-    setInterval(updateTime, 1000);
-    updateTime();
-
-
-    const fruitingButton = document.getElementById('mode-fruiting-button');
-    if (fruitingButton) {
-        fruitingButton.addEventListener('click', () => {
-            setDeviceState('mode', 'fruiting');
-        });
-    } else {
-        console.error("Button element not found: mode-fruiting-button");
-    }
-
-    const colonisationButton = document.getElementById('mode-colonisation-button');
-    if (colonisationButton) {
-        colonisationButton.addEventListener('click', () => {
-            setDeviceState('mode', 'colonisation');
-        });
-    } else {
-        console.error("Button element not found: mode-colonisation-button");
-    }
-
-    const addButtonListener = (id, device, state) => {
-        const button = document.getElementById(id);
-        if (button) {
-            button.addEventListener('click', () => setDeviceState(device, state));
-        } else {
-            console.error(`Button element not found: ${id}`);
-        }
-    };
-
+    // Device override buttons
     ['pump', 'heater', 'fan', 'mister', 'lights'].forEach(device => {
-        addButtonListener(`${device}-on`, device, 'on');
-        addButtonListener(`${device}-off`, device, 'off');
-        addButtonListener(`${device}-auto`, device, 'no override');
+        addButtonListener(`${device}-on`, 'click', () => setDeviceState(device, 'on'));
+        addButtonListener(`${device}-off`, 'click', () => setDeviceState(device, 'off'));
+        addButtonListener(`${device}-auto`, 'click', () => setDeviceState(device, 'no override'));
     });
 
-    const configToggleButton = document.getElementById('config-toggle-button');
-    if (configToggleButton) {
-        configToggleButton.addEventListener('click', toggleConfigEditMode);
-        configToggleButton.textContent = 'Edit Configuration';
-    } else {
-        console.error("Config toggle button not found: config-toggle-button");
-    }
+    // Mode buttons
+    addButtonListener('mode-fruiting-button', 'click', () => setDeviceState('mode', 'fruiting'));
+    addButtonListener('mode-colonisation-button', 'click', () => setDeviceState('mode', 'colonisation'));
 
+    // Configuration button
+    addButtonListener('config-toggle-button', 'click', toggleConfigEditMode);
+
+    connectMQTT();
+    fetchAndDisplayHistoricalEnergy();
+    setInterval(fetchAndDisplayHistoricalEnergy, 60 * 60 * 1000); 
+    setInterval(updateTime, 1000);
     setConfigInputDisplayAndState("fruiting");
 
 });
