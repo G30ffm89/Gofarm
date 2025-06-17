@@ -150,16 +150,16 @@ function handleSensorData(data) {
 
     //if the check is seccuessful and the key exists in data it writes the value to 1 decimal place ie 82.9
     if (dailyHumidHighElement && data.daily_high_humidity !== undefined) {
-        dailyHumidHighElement.textContent = `High: ${data.daily_high_humidity.toFixed(1)}%`;
+        dailyHumidHighElement.textContent = `${data.daily_high_humidity.toFixed(1)}%`;
     }
     if (dailyHumidLowElement && data.daily_low_humidity !== undefined) {
-        dailyHumidLowElement.textContent = `Low: ${data.daily_low_humidity.toFixed(1)}%`;
+        dailyHumidLowElement.textContent = `${data.daily_low_humidity.toFixed(1)}%`;
     }
     if (dailyTempHighElement && data.daily_high_temp !== undefined) {
-        dailyTempHighElement.textContent = `High: ${data.daily_high_temp.toFixed(1)}°C`;
+        dailyTempHighElement.textContent = `${data.daily_high_temp.toFixed(1)}°C`;
     }
     if (dailyTempLowElement && data.daily_low_temp !== undefined) {
-        dailyTempLowElement.textContent = `Low: ${data.daily_low_temp.toFixed(1)}°C`;
+        dailyTempLowElement.textContent = `${data.daily_low_temp.toFixed(1)}°C`;
     }
 }
 
@@ -640,6 +640,8 @@ document.addEventListener('DOMContentLoaded', function () {
         decimals: 2,
         valueFontFamily: "DotGothic16",
         labelFontFaimly: "DotGothic16",
+        valueFontColor: "purple",
+        labelFontColor: "white",
         min: 0, 
         max: 100,
         value: 0,
@@ -666,6 +668,8 @@ document.addEventListener('DOMContentLoaded', function () {
         max: 30,
         decimals: 2,
         valueFontFamily: "DotGothic16",
+        valueFontColor: "purple",
+        labelFontColor: "white",
         symbol: "°C",
         gaugeWidthScale: 0.3,
         relativeGaugeSize: true,

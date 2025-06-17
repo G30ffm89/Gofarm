@@ -1,7 +1,6 @@
-@keyframes chartjs-render-animation{from{opacity:.99}to{opacity:1}}.chartjs-render-monitor{animation:chartjs-render-animation 1ms}.chartjs-size-monitor,.chartjs-size-monitor-expand,.chartjs-size-monitor-shrink{position:absolute;direction:ltr;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;visibility:hidden;z-index:-1}.chartjs-size-monitor-expand>div{position:absolute;width:1000000px;height:1000000px;left:0;top:0}.chartjs-size-monitor-shrink>div{position:absolute;width:200%;height:200%;left:0;top:0}
-
-
-html, body {
+/* --- General Setup --- */
+html,
+body {
   height: 100%;
   font-size: 18px;
   font-family: "Orbitron", sans-serif;
@@ -10,48 +9,32 @@ html, body {
   color: purple;
 }
 
-
-
-.responsive {
-  width: 100%;
-  min-width: 400px;
-  height: auto;
+* {
+  box-sizing: border-box;
 }
 
+/* --- Header --- */
+.header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 5px 0;
+}
+.header .time {
+  margin-right: 50px;
+}
 .control-section {
-    display: flex;
-    align-items: center;
-    gap: 10px; 
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .control-section button.disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%; 
-    padding: 5px 0;
-}
-
-.header .time {
-    margin-right: 50px;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-h2 {
-  font-size: 22px;
-  margin-bottom: 20px; 
-  position: relative;
-  margin-top: 0; 
-}
-
-
+/* --- Cards --- */
 
 .led {
   width: 75px;
@@ -136,87 +119,25 @@ h2 {
   cursor: not-allowed;
 }
 
-
-.image-container{
+.led-controls{
   display: flex;
-  justify-content: center;
-  align-items: center; 
+  align-items: center;
+  gap: 10px;
 }
 
-.config-controls {
-
-  padding: 20px;
-  border-radius: 5px;
-  border: 1px solid #ccc; 
-}
-
-.config-item {
+.wattage-control {
   display: flex;
-  justify-content: space-between;
+
   align-items: center;
-  margin-bottom: 10px;
-}
 
-.config-item label {
-  margin-right: 10px; 
-  flex-basis: 60%; 
-  font-family: "Space Grotesk", sans-serif;
-  font-optical-sizing: auto;
-  font-style: normal;
-}
-
-.config-item input {
-  background-color: black;
-  color: purple;
-  width: 9ch;
-  flex-basis: auto; 
-  padding: 5px;
-  border: 3px solid grey;
-  border-radius: 3px;
-  font-family: "DotGothic16", sans-serif;
-  font-weight: 400;
-  font-style: normal;
-}
-.config-item button{
-  align-items: center;
-}
-button {
-  display: block;
-  padding: 10px;
-  margin-top: 20px; 
-  background-image: linear-gradient( #04080b, #12191f );
-  color: white;
-  border: 3px solid grey;
-  border-radius: 4px;
-  cursor: pointer;
-  font-family: "Space Mono", monospace;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-button:hover {
-  border: 3px solid #367c39;;
-}
-
-#humid-guage,
-#temp-guage {
-  box-sizing: border-box;   
-  flex: 1 1 200px;
-  flex-grow: 1;
-  flex-shrink: 1;
-  max-width: 100%; 
-  box-sizing: border-box; 
-}
-
-.guage{
-  border-radius: 5px;
-  border: 1px solid #ccc; 
+  gap: 8px;
 }
 
 .card-row{
   margin: 0 -5px;
   display: flex;
   justify-content: space-between;
+  padding-bottom: 15px;
 }
 
 .title {
@@ -239,57 +160,107 @@ button:hover {
 .card span {
   font-family: "DotGothic16", sans-serif;
 }
+/* --- Page Layout Structure --- */
 
-@media screen and (max-width: 600px) {
-  .card {
-    width: 100%;
-    display: block;
-    margin-bottom: 20px;
-  }
-}
-
-.container{
-  padding: 64px;
-  width: 100%; 
-  display: block; /* Or block, depending on desired layout */
-  flex-direction: column; /* To stack col-80 and canvas vertically */
-  align-items: center; /* To center the canvas if flexed */
-}
-
-.col-50{
-  float: left;
-  width: 50%;
-  padding: 20px;
-}
-@media screen and (max-width: 950px) {
-  .col-50 {
-    width: 100%;
-  }
-  .col-25{
-    width: 100%;
-  }
-}
-
-
-.col-25{
-  float: left;
-  width: 25%;
-  padding: 20px;
-}
-
-
-.g-container{
-  width: 100%;
+.main-flex-container {
   display: flex;
-  flex-direction: column; 
-  align-items: center; 
+  flex-direction: row; 
+  gap: 20px
 }
 
-.col-80 {
-  width: 80%; 
+.guage-container {
+  flex:1;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  align-items: center;
+  flex-direction: column;
+
+
+}
+.config-container{
+  flex:1;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
 }
 
-#temp_humid_chart {
-  max-width: 100%;
-  height: 400px;
+.webcam-container {
+  flex:2;
+  display: flex;
+  flex-direction: column;
+
 }
+
+.webcam-container img {
+  width: 100%; 
+  height: auto;  
+  display: block; 
+  justify-content: center;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.dalies{
+  display:flex;
+  justify-content: space-around;
+}
+
+h2 {
+  font-size: 22px;
+  margin-bottom: 20px;
+  position: relative;
+  margin-top: 0;
+}
+button {
+  display: block;
+  padding: 10px;
+  margin-top: 20px;
+  background-image: linear-gradient(#04080b, #12191f);
+  color: white;
+  border: 3px solid grey;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+button:hover {
+  border: 3px solid #367c39;
+}
+
+.config-controls {
+  padding: 20px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
+.config-item {
+  display: grid;
+  grid-template-columns: 1fr auto; 
+  gap: 20px; 
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.config-value {
+  justify-self: end; 
+}
+
+.config-item label {
+  font-family: "Space Grotesk", sans-serif;
+  justify-self: start;
+}
+
+.config-value input, 
+.config-value span {
+  background-color: black;
+  color: purple;
+  width: 9ch; 
+  padding: 5px;
+  border-radius: 3px;
+  font-family: "DotGothic16", sans-serif;
+  text-align: right;
+}
+

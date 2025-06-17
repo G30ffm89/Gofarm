@@ -55,8 +55,8 @@ func main() {
 	router.Use(gin.Recovery())
 
 	// Database connection
-	// db, err := sql.Open("sqlite3", "/app/sensor_data.db")
-	db, err := sql.Open("sqlite3", "/home/mike/Documents/Gofarm/farm/sensor_data.db")
+	db, err := sql.Open("sqlite3", "/app/sensor_data.db")
+	//db, err := sql.Open("sqlite3", "/home/mike/Documents/Gofarm/farm/sensor_data.db")
 	if err != nil {
 		fmt.Println("Error opening database:", err)
 		return

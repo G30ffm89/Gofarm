@@ -39,205 +39,228 @@
 <div id="alert-container" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: auto; z-index: 1000;">
 </div>
 
-<div id="grid_home">
-    <div class="card-row">
+<div class="card-row">
 
-        <div class="card">
-            <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="heater_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
-                <path class="indicator-path" d="M8,17h8a1,1,0,0,1,1,1v3a0,0,0,0,1,0,0H7a0,0,0,0,1,0,0V18A1,1,0,0,1,8,17Z" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
-                <path class="primary-path" d="M12,11h8a1,1,0,0,1,1,1v8a1,1,0,0,1-1,1H4a1,1,0,0,1-1-1V12a1,1,0,0,1,1-1H6" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
-                <path class="ac-path" data-name="AC" d="M11,7.78V5A2,2,0,0,0,9,3H9A2,2,0,0,0,7,5V7.78a3,3,0,0,0-1,2.75A3,3,0,0,0,12,10,3,3,0,0,0,11,7.78ZM15,6h4M17,4V8" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
-            </svg>
-            <h3>Heat Mat</h3> 
-            <p>Wattage: 
-                <span id="heater-wattage-display" style="display: inline;">150 W</span> 
-                <input type="number" id="heater-wattage-input" value="150" min="0" step="any" style="display: none;"> 
-                <button id="heater-wattage-toggle-button">Edit</button>
-            </p>
-            <p>Daily Time On = <span id="heater-time-on">--:--</span></p>
-            <p>Daily Energy Use: <span id="heater-energy-kwh">0.00 kWh</span></p>
-            <div class="led-controls">
-                <button id="heater-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></button>
-                <button id="heater-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></button>
-                <button id="heater-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
-            </div>    
+    <div class="card">
+        <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="heater_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
+            <path class="indicator-path" d="M8,17h8a1,1,0,0,1,1,1v3a0,0,0,0,1,0,0H7a0,0,0,0,1,0,0V18A1,1,0,0,1,8,17Z" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
+            <path class="primary-path" d="M12,11h8a1,1,0,0,1,1,1v8a1,1,0,0,1-1,1H4a1,1,0,0,1-1-1V12a1,1,0,0,1,1-1H6" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
+            <path class="ac-path" data-name="AC" d="M11,7.78V5A2,2,0,0,0,9,3H9A2,2,0,0,0,7,5V7.78a3,3,0,0,0-1,2.75A3,3,0,0,0,12,10,3,3,0,0,0,11,7.78ZM15,6h4M17,4V8" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
+        </svg>
+        <h3>Heat Mat</h3> 
+        <p class="wattage-control">Wattage: 
+            <span id="heater-wattage-display" style="display: inline;">150 W</span> 
+            <input type="number" id="heater-wattage-input" value="150" min="0" step="any" style="display: none;"> 
+            <button id="heater-wattage-toggle-button">Edit</button>
+        </p>
+        <p>Daily Time On = <span id="heater-time-on">--:--</span></p>
+        <p>Daily Energy Use: <span id="heater-energy-kwh">0.00 kWh</span></p>
+        <div class="led-controls">
+            <button id="heater-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></button>
+            <button id="heater-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></button>
+            <button id="heater-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
+        </div>    
+    </div>
+
+    <div class="card">
+        <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="pump_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
+            <path class="indicator-path" d="M8,17h8a1,1,0,0,1,1,1v3a0,0,0,0,1,0,0H7a0,0,0,0,1,0,0V18A1,1,0,0,1,8,17Z" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
+            <path class="primary-path" d="M12,11h8a1,1,0,0,1,1,1v8a1,1,0,0,1-1,1H4a1,1,0,0,1-1-1V12a1,1,0,0,1,1-1H6" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
+            <path class="ac-path" data-name="AC" d="M11,7.78V5A2,2,0,0,0,9,3H9A2,2,0,0,0,7,5V7.78a3,3,0,0,0-1,2.75A3,3,0,0,0,12,10,3,3,0,0,0,11,7.78ZM15,6h4" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
+        </svg>
+        <h3>Pump</h3>
+        <p class="wattage-control">Wattage:
+            <span id="pump-wattage-display" style="display: inline;">50 W</span>
+            <input type="number" id="pump-wattage-input" value="50" min="0" step="any" style="display: none;">
+            <button id="pump-wattage-toggle-button">Edit</button>
+        </p>
+        <p>Daily Time On = <span id="pump-time-on">--:--</span></p>
+        <p>Daily Energy Use: <span id="pump-energy-kwh">0.00 kWh</span></p>
+        <div class="led-controls">
+            <button id="pump-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></button>
+            <button id="pump-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></button>
+            <button id="pump-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
         </div>
-
-        <div class="card">
-            <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="pump_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
-                <path class="indicator-path" d="M8,17h8a1,1,0,0,1,1,1v3a0,0,0,0,1,0,0H7a0,0,0,0,1,0,0V18A1,1,0,0,1,8,17Z" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
-                <path class="primary-path" d="M12,11h8a1,1,0,0,1,1,1v8a1,1,0,0,1-1,1H4a1,1,0,0,1-1-1V12a1,1,0,0,1,1-1H6" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
-                <path class="ac-path" data-name="AC" d="M11,7.78V5A2,2,0,0,0,9,3H9A2,2,0,0,0,7,5V7.78a3,3,0,0,0-1,2.75A3,3,0,0,0,12,10,3,3,0,0,0,11,7.78ZM15,6h4" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
-            </svg>
-            <h3>Pump</h3>
-            <p>Wattage:
-                <span id="pump-wattage-display" style="display: inline;">50 W</span>
-                <input type="number" id="pump-wattage-input" value="50" min="0" step="any" style="display: none;">
-                <button id="pump-wattage-toggle-button">Edit</button>
-            </p>
-            <p>Daily Time On = <span id="pump-time-on">--:--</span></p>
-            <p>Daily Energy Use: <span id="pump-energy-kwh">0.00 kWh</span></p>
-            <div class="led-controls">
-                <button id="pump-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></button>
-                <button id="pump-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></button>
-                <button id="pump-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
-            </div>
-        </div>
-                
-        <div class="card">     
-            <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="fan_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
-                <path class="indicator-path" d="M19,6a2,2,0,0,1,0,4H13" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
-                <line class="indicator-path" data-name="line" x1="9" y1="6" x2="13" y2="6" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></line>
-                <path class="primary-path" d="M16,18a2,2,0,0,0,0-4H6" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
-                <line class="primary-path" data-name="primary" x1="3" y1="10" x2="9" y2="10" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></line>
-            </svg>
-            <h3>Fan</h3>
-            <p>Wattage: 
-                <span id="fan-wattage-display" style="display: inline;">50 W</span>
-                <input type="number" id="fan-wattage-input" value="50" min="0" step="any" style="display: none;">
-                <button id="fan-wattage-toggle-button">Edit</button>
-            </p>
-            <p>Daily Time On = <span id="fan-time-on">--:--</span></p>
-            <p>Daily Energy Use: <span id="fan-energy-kwh">0.00 kWh</span></p>
-            <div class="led-controls">
-                <button id="fan-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></button>
-                <button id="fan-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></i></button>
-                <button id="fan-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
-            </div>
-        </div>
-
-        <div class="card">
-            <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="mister_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
-                <path class="indicator-path" d="M14,17a2,2,0,0,1-4,0c0-1.92,2-4,2-4S14,15.08,14,17Z" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
-                <path class="primary-path" d="M18,16.87a4,4,0,0,0-.32-7.8,6,6,0,0,0-11.6,1A3.49,3.49,0,0,0,6,17" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
-            </svg>
-            <h3>Mister</h3>
-            <p>Wattage: 
-                <span id="mister-wattage-display" style="display: inline;">50 W</span>
-                <input type="number" id="mister-wattage-input" value="50" min="0" step="any" style="display: none;">
-                <button id="mister-wattage-toggle-button">Edit</button>
-            </p>
-            <p>Daily Time On = <span id="mister-time-on">--:--</span></p>
-            <p>Daily Energy Use: <span id="mister-energy-kwh">0.00 kWh</span></p> 
-            <div class="led-controls">
-                <button id="mister-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></i></button>
-                <button id="mister-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></button>
-                <button id="mister-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
-            </div>
-        </div>        
-
-        <div class="card">
-            <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="lights_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
-                <path class="indicator-path" d="M12,3V4m6.36,1.64-.7.7M21,12H20m-1.64,6.36-.7-.7M12,21V20M5.64,18.36l.7-.7M3,12H4M5.64,5.64l.7.7" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
-                <circle class="primary-path" cx="12" cy="12" r="4" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></circle>
-            </svg>
-            <h3>Lights</h3>
-            <p>Wattage: 
-                <span id="lights-wattage-display" style="display: inline;">50 W</span>
-                <input type="number" id="lights-wattage-input" value="50" min="0" step="any" style="display: none;">
-                <button id="lights-wattage-toggle-button">Edit</button>
-            </p>
-            <p>Daily Time On = <span id="light-time-on">--:--</span></p>
-            <p>Daily Energy Use: <span id="lights-energy-kwh">0.00 kWh</span></p>
-            <div class="led-controls">
-                <button id="lights-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></button>
-                <button id="lights-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></button>
-                <button id="lights-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
-            </div>
-        </div>
-
+    </div>
+            
+    <div class="card">     
+        <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="fan_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
+            <path class="indicator-path" d="M19,6a2,2,0,0,1,0,4H13" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
+            <line class="indicator-path" data-name="line" x1="9" y1="6" x2="13" y2="6" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></line>
+            <path class="primary-path" d="M16,18a2,2,0,0,0,0-4H6" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
+            <line class="primary-path" data-name="primary" x1="3" y1="10" x2="9" y2="10" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></line>
+        </svg>
+        <h3>Fan</h3>
+        <p class="wattage-control">Wattage: 
+            <span id="fan-wattage-display" style="display: inline;">50 W</span>
+            <input type="number" id="fan-wattage-input" value="50" min="0" step="any" style="display: none;">
+            <button id="fan-wattage-toggle-button">Edit</button>
+        </p>
+        <p>Daily Time On = <span id="fan-time-on">--:--</span></p>
+        <p>Daily Energy Use: <span id="fan-energy-kwh">0.00 kWh</span></p>
+        <div class="led-controls">
+            <button id="fan-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></button>
+            <button id="fan-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></i></button>
+            <button id="fan-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
         </div>
     </div>
 
-    <div class="container">
+    <div class="card">
+        <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="mister_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
+            <path class="indicator-path" d="M14,17a2,2,0,0,1-4,0c0-1.92,2-4,2-4S14,15.08,14,17Z" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
+            <path class="primary-path" d="M18,16.87a4,4,0,0,0-.32-7.8,6,6,0,0,0-11.6,1A3.49,3.49,0,0,0,6,17" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></path>
+        </svg>
+        <h3>Mister</h3>
+        <p class="wattage-control">Wattage: 
+            <span id="mister-wattage-display" style="display: inline;">50 W</span>
+            <input type="number" id="mister-wattage-input" value="50" min="0" step="any" style="display: none;">
+            <button id="mister-wattage-toggle-button">Edit</button>
+        </p>
+        <p>Daily Time On = <span id="mister-time-on">--:--</span></p>
+        <p>Daily Energy Use: <span id="mister-energy-kwh">0.00 kWh</span></p> 
+        <div class="led-controls">
+            <button id="mister-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></i></button>
+            <button id="mister-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></button>
+            <button id="mister-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
+        </div>
+    </div>        
 
-        <div class="col-25">
-            <div class="guage">
+    <div class="card">
+        <svg class="led red" fill="#000000" width="75px" height="75px" viewBox="0 0 24 24" id="lights_led" data-name="Line Color" xmlns="http://www.w3.org/2000/svg" class="icon line-color">
+            <path class="indicator-path" d="M12,3V4m6.36,1.64-.7.7M21,12H20m-1.64,6.36-.7-.7M12,21V20M5.64,18.36l.7-.7M3,12H4M5.64,5.64l.7.7" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;" filter="url(#indicator-glow)"></path>
+            <circle class="primary-path" cx="12" cy="12" r="4" style="fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2;"></circle>
+        </svg>
+        <h3>Lights</h3>
+        <p class="wattage-control">Wattage: 
+            <span id="lights-wattage-display" style="display: inline;">50 W</span>
+            <input type="number" id="lights-wattage-input" value="50" min="0" step="any" style="display: none;">
+            <button id="lights-wattage-toggle-button">Edit</button>
+        </p>
+        <p>Daily Time On = <span id="light-time-on">--:--</span></p>
+        <p>Daily Energy Use: <span id="lights-energy-kwh">0.00 kWh</span></p>
+        <div class="led-controls">
+            <button id="lights-on"><i class="fa-solid fa-check" style="color: #63E6BE;"></i></button>
+            <button id="lights-off"><i class="fa-solid fa-xmark" style="color: #ff0000;"></i></button>
+            <button id="lights-auto" class="disabled"><i class="fa-solid fa-arrows-rotate" style="color: #6495ED;"></i></button>
+        </div>
+    </div>
+
+    </div>
+<div class="main-flex-container">
+    <div class="guage-container">
+        <div class="guage">
+            <div class="gauge-item">
                 <div id="humid-guage"></div>
-                <p id="daily-humid-high"></p>
-                <p id="daily-humid-low"></p>
-                <div id="temp-guage" ></div>
-                <p id="daily-temp-high"></p>
-                <p id="daily-temp-low"></p>
-            </div>
-        </div>
-
-        <div class="col-25">
-            <div class="config-controls">
-                <h2>Configuration</h2>
-                <div class="config-item">
-                    <label for="temp-min-input">Min Temperature (°C):</label> <span id="temp-min-display" style="display: inline;">--</span> <input type="number" id="temp-min-input" min="0" step="any" style="display: none;"> </div>
-                <div class="config-item">
-                    <label for="temp-max-input">Max Temperature (°C):</label>
-                    <span id="temp-max-display" style="display: inline;">--</span>
-                    <input type="number" id="temp-max-input" min="0" step="any" style="display: none;">
+                <div class="dalies">
+                    <p id="daily-humid-high"></p>
+                    <p id="daily-humid-low"></p>
                 </div>
-                <div class="config-item">
-                    <label for="humid-min-input">Min Humidity (%):</label>
-                    <span id="humid-min-display" style="display: inline;">--</span>
-                    <input type="number" id="humid-min-input" min="0" step="any" style="display: none;">
-                </div>
-                <div class="config-item">
-                    <label for="humid-max-input">Max Humidity (%):</label>
-                    <span id="humid-max-display" style="display: inline;">--</span>
-                    <input type="number" id="humid-max-input" min="0" step="any" style="display: none;">
-                </div>
-                <div class="config-item">
-                    <label for="fan-duration-input">Fan Run Duration (minutes):</label>
-                    <span id="fan-duration-display" style="display: inline;">--</span>
-                    <input type="number" id="fan-duration-input" min="0" step="any" style="display: none;">
-                </div>
-                <div class="config-item">
-                    <label for="fan-interval-input">Fan Interval (minutes):</label>
-                    <span id="fan-interval-display" style="display: inline;">--</span>
-                    <input type="number" id="fan-interval-input" min="0" step="any" style="display: none;">
-                </div>
-                <div class="config-item">
-                    <label for="lights-on-hour-input">Lights On Hour (UTC):</label>
-                    <span id="lights-on-hour-display" style="display: inline;">--</span>
-                    <input type="number" id="lights-on-hour-input" min="0" max="23" style="display: none;">
-                </div>
-                <div class="config-item">
-                    <label for="lights-off-hour-input">Lights Off Hour (UTC):</label>
-                    <span id="lights-off-hour-display" style="display: inline;">--</span>
-                    <input type="number" id="lights-off-hour-input" min="0" max="23" style="display: none;">
-                </div>
-                <button id="config-toggle-button">Edit Configuration</button>
-            </div>
-        </div>
-
-        <div class="col-50">
-            <div class="image-container">
-                <img class="responsive" src="http://192.168.1.170:8081" alt="Live Webcam Stream">
             </div>
 
+            <div class="gauge-item">
+                <div id="temp-guage"></div>
+                <div class="dalies">
+                    <p id="daily-temp-high"></p>
+                    <p id="daily-temp-low"></p>
+                </div>
+            </div> 
         </div>
     </div>
 
-    <div class="container">
-        <div class="historical-energy-data">
-        <h3>Daily Energy Usage (Last 7 Days)</h3>
-        <table id="daily-energy-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Pump (kWh)</th>
-                    <th>Mister (kWh)</th>
-                    <th>Heater (kWh)</th>
-                    <th>Lights (kWh)</th>
-                    <th>Fan (kWh)</th>
-                </tr>
-            </thead>
-            <tbody>
-                </tbody>
-        </table>
+    <div class="config-container">
+        <div class="config-controls">
+            <h2>Configuration</h2>
+            <div class="config-item">
+                <label for="temp-min-input">Min Temperature (°C):</label> 
+                <div class="config-value">
+                    <span id="temp-min-display" class="value-field" style="display: inline;">--</span> 
+                    <input type="number" class="value-field" id="temp-min-input" min="0" step="any" style="display: none;"> 
+                </div>
+            </div>
+            <div class="config-item">
+                <label for="temp-max-input">Max Temperature (°C):</label>
+                <div class="config-value">
+                    <span id="temp-max-display" class="value-field" style="display: inline;">--</span>
+                    <input type="number" class="value-field" id="temp-max-input" min="0" step="any" style="display: none;">
+                </div>
+            </div>
+            <div class="config-item">
+                <label for="humid-min-input">Min Humidity (%):</label>
+                <div class="config-value">
+                    <span id="humid-min-display" class="value-field" style="display: inline;">--</span>
+                    <input type="number" class="value-field" id="humid-min-input" min="0" step="any" style="display: none;">
+                </div>
+            </div>
+            <div class="config-item">
+                <label for="humid-max-input">Max Humidity (%):</label>
+                <div class="config-value">
+                    <span id="humid-max-display" class="value-field" style="display: inline;">--</span>
+                    <input type="number" class="value-field" id="humid-max-input" min="0" step="any" style="display: none;">
+                </div>
+            </div>
+            <div class="config-item">
+                <label for="fan-duration-input">Fan Run Duration (minutes):</label>
+                <div class="config-value">
+                    <span id="fan-duration-display" class="value-field" style="display: inline;">--</span>
+                    <input type="number" class="value-field" id="fan-duration-input" min="0" step="any" style="display: none;">
+                </div>
+            </div>
+            <div class="config-item">
+                <label for="fan-interval-input">Fan Interval (minutes):</label>
+                <div class="config-value">
+                    <span id="fan-interval-display" class="value-field" style="display: inline;">--</span>
+                    <input type="number" class="value-field" id="fan-interval-input" min="0" step="any" style="display: none;">
+                </div>
+            </div>
+            <div class="config-item">
+                <label for="lights-on-hour-input">Lights On Hour (UTC):</label>
+                <div class="config-value">
+                    <span id="lights-on-hour-display" class="value-field" style="display: inline;">--</span>
+                    <input type="number" class="value-field" id="lights-on-hour-input" min="0" max="23" style="display: none;">
+                </div>
+            </div>
+            <div class="config-item">
+                <label for="lights-off-hour-input">Lights Off Hour (UTC):</label>
+                <div class="config-value">
+                    <span id="lights-off-hour-display" class="value-field" style="display: inline;">--</span>
+                    <input type="number" class="value-field" id="lights-off-hour-input" min="0" max="23" style="display: none;">
+                </div>
+            </div>
+            <button id="config-toggle-button">Edit Configuration</button>
         </div>
     </div>
-    <div id="daily-charts-container">
-            <p>Loading climate data...</p>
-    </div>
 
+    <div class="webcam-container">
+        <div class="image-container">
+            <img src="http://192.168.1.170:8081" alt="Live Webcam Stream">
+        </div>
+
+    </div>
 </div>
+
+<div class="container">
+    <div class="historical-energy-data">
+    <h3>Daily Energy Usage (Last 7 Days)</h3>
+    <table id="daily-energy-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Pump (kWh)</th>
+                <th>Mister (kWh)</th>
+                <th>Heater (kWh)</th>
+                <th>Lights (kWh)</th>
+                <th>Fan (kWh)</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+    </div>
+</div>
+<div id="daily-charts-container">
+        <p>Loading climate data...</p>
+</div>
+
 
 
 <footer>
