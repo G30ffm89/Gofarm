@@ -14,3 +14,4 @@ docker run --privileged -p 8081:8081 -d --name farm-webcam-container --network f
 docker build --no-cache --progress=plain -t farm-controller-image -f Dockerfile .
 
 docker run --privileged -d --name farm-controller-container --network farm-network --link mos1:mqtt farm-controller-image
+https://benpickles.github.io/peity/

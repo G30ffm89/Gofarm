@@ -25,6 +25,11 @@ type DailySensorReadings struct {
 	Humidities   []float64 `json:"humidities"`
 }
 
+type LastHourReadings struct {
+	Temperatures []float64 `json:"temperatures"`
+	Humidities   []float64 `json:"humidities"`
+}
+
 type DailyDeviceTime struct {
 	Date         string `json:"date"`
 	PumpTimeOn   int    `json:"pump_time_on"`
@@ -55,8 +60,8 @@ func main() {
 	router.Use(gin.Recovery())
 
 	// Database connection
-	db, err := sql.Open("sqlite3", "/app/sensor_data.db")
-	//db, err := sql.Open("sqlite3", "/home/mike/Documents/Gofarm/farm/sensor_data.db")
+	//db, err := sql.Open("sqlite3", "/app/sensor_data.db")
+	db, err := sql.Open("sqlite3", "/home/mike/Documents/Gofarm/farm/sensor_data.db")
 	if err != nil {
 		fmt.Println("Error opening database:", err)
 		return
@@ -79,8 +84,8 @@ func main() {
 			WHERE
 				timestamp >= ?
 			GROUP BY
-				-- Group by a calculated value representing the start of each 15-minute interval
-				strftime('%Y-%m-%d %H', timestamp), CAST(strftime('%M', timestamp) / 15 AS INTEGER)
+				-- 45-minute interval
+				strftime('%Y-%m-%d %H', timestamp), CAST(strftime('%M', timestamp) / 60 AS INTEGER)
 			ORDER BY
 				interval_start ASC;
 		`, sevenDaysAgo)
@@ -173,6 +178,57 @@ func main() {
 		}
 
 		c.JSON(http.StatusOK, dailyTimes)
+	})
+
+	router.GET("/api/last_hour", func(c *gin.Context) {
+		// Calculate the timestamp for one hour ago in UTC
+		sixHoursAgo := time.Now().UTC().Add(-6 * time.Hour)
+
+		// Query for all individual sensor readings from the last hour.
+		// We are not aggregating here, just getting the raw data points.
+		rows, err := db.Query(`
+        SELECT
+            temperature,
+            humidity
+        FROM
+            sensors
+        WHERE
+            timestamp >= ?
+        ORDER BY
+            timestamp ASC;
+    `, sixHoursAgo)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error querying sensor data for the last hour: " + err.Error()})
+			return
+		}
+		defer rows.Close()
+
+		// Initialize our response struct
+		var responseData LastHourReadings
+		// Pre-allocating slice capacity can be a minor optimization if you expect many readings
+		responseData.Temperatures = []float64{}
+		responseData.Humidities = []float64{}
+
+		for rows.Next() {
+			var temp, hum float64
+			if err := rows.Scan(&temp, &hum); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning last hour sensor row: " + err.Error()})
+				return
+			}
+
+			// Append the readings to our slices
+			responseData.Temperatures = append(responseData.Temperatures, temp)
+			responseData.Humidities = append(responseData.Humidities, hum)
+		}
+
+		// Check for errors during row iteration
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating last hour sensor rows: " + err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, responseData)
 	})
 
 	router.Run(":8080")

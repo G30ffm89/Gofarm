@@ -7,6 +7,8 @@ const mqttTopicConfigSet = 'farm/sensors/config';
 const mqttTopicConfigStatus = 'farm/sensors/status';
 const mqttTopicAlerts = 'farm/sensors/alerts';
 const LOCAL_STORAGE_WATTS_KEY = 'deviceWattages'; //key to save custom wattage
+const editIconSVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="button-icon"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>'
+const saveIconSVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="button-icon"><polyline points="20 6 9 17 4 12"></polyline></svg>'
 
 let humid_gauge;
 let temp_guage;
@@ -14,6 +16,12 @@ let initialConfigLoaded = false; //prevents config from being reloaded every tim
 let currentDeviceState = {}; //stores the most recent device state json objects from go
 let latestDeviceStateData = null;
 let isConfigEditing = false; 
+
+let $sparklineTemp, $sparklineHumid;
+let sparklineTempData = [];
+let sparklineHumidData = [];
+const MAX_SPARKLINE_POINTS = 60; 
+const ELECTRICITY_PRICE_PER_KWH = 0.2573;
 
 let DEVICE_POWER_WATTS = { //object to host the watts for each device 
     pump: 50,
@@ -142,6 +150,24 @@ function handleSensorData(data) {
         temp_guage.refresh(data.temperature);
     }
 
+    if ($sparklineTemp && $sparklineHumid) {
+        // Add new data point to the end of our arrays
+        sparklineTempData.push(data.temperature);
+        sparklineHumidData.push(data.humidity);
+
+        // Remove the oldest data point if we're over the max limit
+        if (sparklineTempData.length > MAX_SPARKLINE_POINTS) {
+            sparklineTempData.shift();
+        }
+        if (sparklineHumidData.length > MAX_SPARKLINE_POINTS) {
+            sparklineHumidData.shift();
+        }
+
+        // Update the Peity charts by changing the text content and calling .change()
+        $sparklineTemp.text(sparklineTempData.join(',')).change();
+        $sparklineHumid.text(sparklineHumidData.join(',')).change();
+    }
+
     //find the relevant IDS 
     const dailyHumidHighElement = document.getElementById('daily-humid-high');
     const dailyHumidLowElement = document.getElementById('daily-humid-low');
@@ -160,6 +186,47 @@ function handleSensorData(data) {
     }
     if (dailyTempLowElement && data.daily_low_temp !== undefined) {
         dailyTempLowElement.textContent = `${data.daily_low_temp.toFixed(1)}°C`;
+    }
+}
+
+async function initializeSparklines() {
+    console.log("Initializing sparkline charts...");
+    try {
+        const response = await fetch('/api/last_hour');
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        const data = await response.json();
+
+        sparklineTempData = data.temperatures || [];
+        sparklineHumidData = data.humidities || [];
+
+        $sparklineTemp = $("#sparkline-temp");
+        $sparklineHumid = $("#sparkline-humid");
+
+        $sparklineTemp.text(sparklineTempData.join(','));
+        $sparklineHumid.text(sparklineHumidData.join(','));
+
+          $sparklineTemp.peity("line", {
+            fill: "rgba(23, 162, 184, 0.1)",
+            stroke: "rgb(23, 162, 184)",
+            width: '100%',
+            height: 50
+        });
+
+        $sparklineHumid.peity("line", {
+            fill: "rgba(66, 165, 245, 0.2)",  // A light blue fill for humidity
+            stroke: "rgb(66, 165, 245)",      // A solid blue stroke
+            width: '100%',
+            height: 50
+        });
+
+        console.log("Sparkline charts initialized successfully.");
+
+    } catch (error) {
+        console.error('Error initializing sparkline charts:', error);
+        $("#sparkline-temp").text("Could not load data.");
+        $("#sparkline-humid").text("Could not load data.");
     }
 }
 
@@ -518,13 +585,14 @@ function initializeWattageInputs() {
                 displayElement.style.display = 'none';
                 inputElement.style.display = 'inline';
                 inputElement.value = DEVICE_POWER_WATTS[device];
-                toggleButton.textContent = 'Save';
+                toggleButton.innerHTML = saveIconSVG; 
                 inputElement.focus();
             } else {
                 displayElement.textContent = `${DEVICE_POWER_WATTS[device]} W`;
                 displayElement.style.display = 'inline';
                 inputElement.style.display = 'none';
-                toggleButton.textContent = 'Edit';
+                toggleButton.innerHTML = editIconSVG;
+
             }
         }
 
@@ -564,11 +632,11 @@ const apiDailyDeviceTimes = '/api/device_daily_times';
 
 async function fetchAndDisplayHistoricalEnergy() {
     try {
-        const response = await fetch(`${apiDailyDeviceTimes}?days=7`); // Fetch last 7 days
+        const response = await fetch(`${apiDailyDeviceTimes}?days=7`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const data = await response.json(); 
+        const data = await response.json();
 
         const tableBody = document.querySelector('#daily-energy-table tbody');
         if (!tableBody) {
@@ -580,31 +648,43 @@ async function fetchAndDisplayHistoricalEnergy() {
 
         if (data.length === 0) {
             console.warn("No historical data received from API. Table will be empty.");
-            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No historical data available. Please seed the database.</td></tr>';
+            // NEW: Updated colspan to 7 to account for the new cost column
+            tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No historical data available.</td></tr>';
+            return; // Exit the function
         }
 
         data.forEach(dayData => {
             const row = tableBody.insertRow();
-            row.insertCell().textContent = dayData.date; 
+            row.insertCell().textContent = dayData.date;
+
+            // NEW: Initialize a variable to sum the cost for the day
+            let totalDailyCost = 0;
 
             const devices = ['pump', 'mister', 'heater', 'lights', 'fan'];
             devices.forEach(device => {
-                const timeOnSeconds = dayData[`${device}_time_on`]; 
-
+                const timeOnSeconds = dayData[`${device}_time_on`];
                 const powerWatts = DEVICE_POWER_WATTS[device];
-
                 const cell = row.insertCell();
-
                 const formattedTime = formatSecondsToHhMm(timeOnSeconds);
-                cell.innerHTML = `<strong>${formattedTime}</strong><br>`; 
+                cell.innerHTML = `<strong>${formattedTime}</strong><br>`;
 
                 let energyKwh = 0;
                 if (powerWatts && timeOnSeconds !== undefined) {
-                    const totalHours = timeOnSeconds / 3600; 
-                    energyKwh = (powerWatts * totalHours) / 1000; // Energy (kWh) = Power (W) * Time (h) / 1000
+                    const totalHours = timeOnSeconds / 3600;
+                    energyKwh = (powerWatts * totalHours) / 1000;
                 }
+                
+                // NEW: Calculate the cost for this device and add it to the daily total
+                const deviceCost = energyKwh * ELECTRICITY_PRICE_PER_KWH;
+                totalDailyCost += deviceCost;
+
                 cell.innerHTML += `(${energyKwh.toFixed(2)} kWh)`;
             });
+
+            // NEW: After looping through all devices, add the final cost cell for the day
+            const costCell = row.insertCell();
+            costCell.textContent = `£${totalDailyCost.toFixed(2)}`;
+            costCell.style.fontWeight = 'bold'; // Make the cost stand out
         });
 
     } catch (error) {
@@ -710,6 +790,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Configuration button
     addButtonListener('config-toggle-button', 'click', toggleConfigEditMode);
+
+    initializeSparklines();
+
 
     connectMQTT();
     fetchAndDisplayHistoricalEnergy();
